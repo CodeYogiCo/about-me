@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Your Name — engineering, systems, always building</title>
+  <meta name="description" content="Personal site of Your Name." />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="page">
+
+    <nav class="topnav">
+      <a href="#writing">writing</a>
+      <a href="#projects">projects</a>
+      <a href="#talks">talks</a>
+      <a href="#reading">reading</a>
+      <a href="mailto:hello@example.com">contact</a>
+    </nav>
+
+    <header class="hero">
+      <div class="hero-photo" aria-hidden="true">
+        <div class="ascii-frame">
+┌─────────────┐
+│             │
+│   ( o  o )  │
+│      &lt;      │
+│    \\___/    │
+│             │
+└─────────────┘
+        </div>
+      </div>
+      <div class="hero-text">
+        <h1>Your Name</h1>
+        <p class="tagline">engineering, systems, and the occasional database. always building.</p>
+        <p class="bio">
+          I work on <span class="hl">distributed systems</span> and developer tooling.
+          Currently building things at <a href="#">Company</a>; previously at
+          <a href="#">PrevCo</a> and <a href="#">EarlierCo</a>. I write about
+          databases, infra, and the weird corners of computer science I keep falling into.
+        </p>
+      </div>
+    </header>
+
+    <section class="socials">
+      <a class="social" href="#">
+        <span class="s-name">github</span>
+        <span class="s-handle">@yourname</span>
+        <span class="s-count">1.2k</span>
+      </a>
+      <a class="social" href="#">
+        <span class="s-name">twitter</span>
+        <span class="s-handle">@yourname</span>
+        <span class="s-count">5k</span>
+      </a>
+      <a class="social" href="#">
+        <span class="s-name">linkedin</span>
+        <span class="s-handle">/in/yourname</span>
+        <span class="s-count">3k</span>
+      </a>
+      <a class="social" href="#">
+        <span class="s-name">youtube</span>
+        <span class="s-handle">@yourname</span>
+        <span class="s-count">800</span>
+      </a>
+    </section>
+
+    <hr class="rule" />
+
+    <section id="writing" class="block">
+      <h2>recent writing</h2>
+      <ul class="entries">
+        <li>
+          <span class="date">2026-04-22</span>
+          <a href="#">Why your B-tree is slower than you think</a>
+        </li>
+        <li>
+          <span class="date">2026-03-15</span>
+          <a href="#">Rebuilding a vector index without downtime</a>
+        </li>
+        <li>
+          <span class="date">2026-02-04</span>
+          <a href="#">Notes on Raft, two years in production</a>
+        </li>
+        <li>
+          <span class="date">2026-01-18</span>
+          <a href="#">A small language for query plans</a>
+        </li>
+        <li>
+          <span class="date">2025-12-02</span>
+          <a href="#">The case for boring infrastructure</a>
+        </li>
+      </ul>
+      <a class="more" href="#">all posts &nbsp;→</a>
+    </section>
+
+    <hr class="rule" />
+
+    <section id="projects" class="block">
+      <h2>things i'm building</h2>
+      <ul class="projects">
+        <li>
+          <div class="p-head">
+            <a href="#" class="p-name">project-one</a>
+            <span class="p-meta">open source · rust</span>
+          </div>
+          <p class="p-desc">A tiny embedded key-value store with a focus on crash safety and zero-config replication.</p>
+        </li>
+        <li>
+          <div class="p-head">
+            <a href="#" class="p-name">project-two</a>
+            <span class="p-meta">side project · typescript</span>
+          </div>
+          <p class="p-desc">A CLI that turns SQL explain plans into ASCII diagrams you can paste into PR descriptions.</p>
+        </li>
+        <li>
+          <div class="p-head">
+            <a href="#" class="p-name">project-three</a>
+            <span class="p-meta">research · python</span>
+          </div>
+          <p class="p-desc">Experiments in approximate nearest-neighbor search over compressed embeddings.</p>
+        </li>
+      </ul>
+    </section>
+
+    <hr class="rule" />
+
+    <section id="newsletter" class="block newsletter">
+      <h2>newsletter</h2>
+      <p>One short post a week on systems engineering. No spam, ever.</p>
+      <form class="sub" onsubmit="event.preventDefault(); this.querySelector('button').textContent='thanks ✓';">
+        <input type="email" placeholder="you@domain.com" required />
+        <button type="submit">subscribe</button>
+      </form>
+    </section>
+
+    <footer class="foot">
+      <div class="foot-left">© 2026 Your Name</div>
+      <div class="foot-right">
+        <a href="#">rss</a>
+        <a href="#">github</a>
+        <a href="#">twitter</a>
+      </div>
+    </footer>
+
+  </div>
+</body>
+</html>
