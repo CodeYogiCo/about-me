@@ -8,7 +8,7 @@ deck: Why I still build with my hands, in the age of agents.
 
 This is the only post on this site for now. It feels right that it's about why I still build — because that's the question the rest of my work hinges on.
 
-The world has changed. Agents can write code. They can scaffold a project, write the tests, ship the feature, fix the bug, update the docs. They get faster and quieter every month. The temptation, especially as a senior engineer, is to stop building yourself and start managing the agents. To become an architect of intent. To delegate.
+The world has changed. Agents can write code. They can scaffold a project, write the tests, ship the feature, fix the bug, update the docs. They get faster and quieter every month. The temptation, especially as a principal engineer, is to stop building yourself and start managing the agents. To become an architect of intent. To delegate. The further along you are, the more this temptation looks like good leverage — until you notice your judgment is starting to lag behind the work.
 
 I keep building anyway. Not because I'm romantic about it. Because I've watched what happens to engineers who stop.
 
