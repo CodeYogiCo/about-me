@@ -157,7 +157,7 @@ function PostsList() {
 
 function SvgCatWalk() {
   return (
-    <svg className="svg-cat" viewBox="0 0 92 48" width="128" height="67" aria-hidden="true">
+    <svg className="svg-cat" viewBox="0 0 92 48" width="166" height="86" aria-hidden="true">
       <path d="M 10 22 Q 2 12 7 4" stroke="currentColor" strokeWidth="2.4" fill="none" strokeLinecap="round" />
       <rect x="10" y="14" width="50" height="18" rx="9" fill="currentColor" />
       <circle cx="66" cy="18" r="11" fill="currentColor" />
@@ -177,7 +177,7 @@ function SvgCatWalk() {
 
 function SvgCatSit() {
   return (
-    <svg className="svg-cat svg-cat-sit" viewBox="0 0 64 60" width="90" height="84" aria-hidden="true">
+    <svg className="svg-cat svg-cat-sit" viewBox="0 0 64 60" width="118" height="110" aria-hidden="true">
       <g className="tail">
         <path d="M 6 50 Q -2 30 20 36" stroke="currentColor" strokeWidth="2.6" fill="none" strokeLinecap="round" />
       </g>
