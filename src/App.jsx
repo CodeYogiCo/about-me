@@ -1,137 +1,167 @@
-import { useState } from 'react'
-import { profile, socials, posts, projects } from './data'
+import { useEffect, useState } from 'react'
+import { profile, posts } from './data'
 
-const ASCII_AVATAR = `┌─────────────┐
-│             │
-│   ( o  o )  │
-│      <      │
-│    \\___/    │
-│             │
-└─────────────┘`
+function useTheme() {
+  const [theme, setTheme] = useState(() => {
+    try {
+      return localStorage.getItem('vv.theme') || 'light'
+    } catch {
+      return 'light'
+    }
+  })
 
-function TopNav() {
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+    try {
+      localStorage.setItem('vv.theme', theme)
+    } catch {}
+  }, [theme])
+
+  const toggle = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))
+  return [theme, toggle]
+}
+
+function useUtcClock() {
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(id)
+  }, [])
+  const hh = String(now.getUTCHours()).padStart(2, '0')
+  const mm = String(now.getUTCMinutes()).padStart(2, '0')
+  const ss = String(now.getUTCSeconds()).padStart(2, '0')
+  return `${hh}:${mm}:${ss} UTC`
+}
+
+function StatusBar({ theme, onToggleTheme }) {
+  const time = useUtcClock()
   return (
-    <nav className="topnav">
-      <a href="#writing">writing</a>
-      <a href="#projects">projects</a>
-      <a href="#talks">talks</a>
-      <a href="#reading">reading</a>
-      <a href={`mailto:${profile.email}`}>contact</a>
-    </nav>
+    <div className="statusbar" role="banner">
+      <div className="left">
+        <span className="dot" />
+        online · {profile.location}
+      </div>
+      <div className="mid">
+        <span style={{ fontVariantNumeric: 'tabular-nums' }}>{time}</span>
+        <span style={{ margin: '0 10px', color: 'var(--rule)' }}>·</span>
+        <span>last edit {profile.lastEdit}</span>
+      </div>
+      <div className="right">
+        <a href="#writing">writing</a>
+        <a href="#about">about</a>
+        <a href={profile.linkedin} target="_blank" rel="noopener">linkedin ↗</a>
+        <button className="theme-toggle" onClick={onToggleTheme} aria-label="toggle theme">
+          {theme === 'dark' ? '☼ light' : '☾ dark'}
+        </button>
+      </div>
+    </div>
   )
 }
 
-function Hero() {
+function SectionLabel({ id, children }) {
   return (
-    <header className="hero">
-      <div className="hero-photo" aria-hidden="true">
-        <pre className="ascii-frame">{ASCII_AVATAR}</pre>
-      </div>
-      <div className="hero-text">
-        <h1>{profile.name}</h1>
-        <p className="tagline">{profile.tagline}</p>
-        <p className="bio">{profile.bio}</p>
+    <div id={id} className="section-label">
+      <span>{children}</span>
+      <span className="rule" />
+    </div>
+  )
+}
+
+function Identity() {
+  return (
+    <header className="section">
+      <div className="identity">
+        <div className="name">
+          {profile.name} <span className="caret" />
+        </div>
+        <div className="role">{profile.role}</div>
+        <div className="tagline">
+          Building engineering, systems, and search. Always{' '}
+          <span className="fn">
+            building
+            <span className="note">— in spreadsheets, in prose, in code.</span>
+          </span>
+          .
+        </div>
       </div>
     </header>
   )
 }
 
-function Socials() {
+function About() {
   return (
-    <section className="socials">
-      {socials.map((s) => (
-        <a key={s.name} className="social" href={s.url}>
-          <span className="s-name">{s.name}</span>
-          <span className="s-handle">{s.handle}</span>
-          <span className="s-count">{s.count}</span>
-        </a>
-      ))}
+    <section className="section about">
+      <SectionLabel id="about">about</SectionLabel>
+      <p>
+        I’m a principal engineer working on the unglamorous middle of the stack — storage,
+        indexing, query planning, and the long tail of failure modes that don’t make it
+        into design docs. I’ve been doing this for a while; I’m still learning a lot.
+      </p>
+      <p className="muted">
+        This site is a place for me to write things down. Notes, half-formed essays,
+        field reports from systems I’ve shipped, broken, and re-shipped. If any of it is
+        useful to you, that’s a good day.
+      </p>
+      <dl className="kv">
+        <dt>currently</dt><dd>building search infrastructure</dd>
+        <dt>focus</dt><dd>distributed systems, retrieval, developer tooling</dd>
+        <dt>elsewhere</dt>
+        <dd>
+          <a href={profile.linkedin} target="_blank" rel="noopener">linkedin</a>
+        </dd>
+        <dt>email</dt>
+        <dd>
+          <a href={`mailto:${profile.email}`}>{profile.email}</a>
+        </dd>
+      </dl>
     </section>
   )
 }
 
-function Writing() {
+function PostsList() {
   return (
-    <section id="writing" className="block">
-      <h2>recent writing</h2>
-      <ul className="entries">
+    <section className="section">
+      <SectionLabel id="writing">writing · {posts.length} posts</SectionLabel>
+      <ul className="posts">
         {posts.map((p) => (
-          <li key={p.title}>
+          <li key={p.slug}>
             <span className="date">{p.date}</span>
-            <a href={p.url}>{p.title}</a>
+            <span className="tag">{p.tag}</span>
+            <span className="title">
+              <a href={`#/post/${p.slug}`}>{p.title}</a>
+            </span>
+            <span className="read">{p.read} →</span>
           </li>
         ))}
       </ul>
-      <a className="more" href="#">all posts &nbsp;→</a>
-    </section>
-  )
-}
-
-function Projects() {
-  return (
-    <section id="projects" className="block">
-      <h2>things i'm building</h2>
-      <ul className="projects">
-        {projects.map((p) => (
-          <li key={p.name}>
-            <div className="p-head">
-              <a href={p.url} className="p-name">{p.name}</a>
-              <span className="p-meta">{p.meta}</span>
-            </div>
-            <p className="p-desc">{p.desc}</p>
-          </li>
-        ))}
-      </ul>
-    </section>
-  )
-}
-
-function Newsletter() {
-  const [submitted, setSubmitted] = useState(false)
-  return (
-    <section id="newsletter" className="block newsletter">
-      <h2>newsletter</h2>
-      <p>One short post a week on systems engineering. No spam, ever.</p>
-      <form
-        className="sub"
-        onSubmit={(e) => {
-          e.preventDefault()
-          setSubmitted(true)
-        }}
-      >
-        <input type="email" placeholder="you@domain.com" required />
-        <button type="submit">{submitted ? 'thanks ✓' : 'subscribe'}</button>
-      </form>
     </section>
   )
 }
 
 function Footer() {
   return (
-    <footer className="foot">
-      <div className="foot-left">© {new Date().getFullYear()} {profile.name}</div>
-      <div className="foot-right">
-        <a href="#">rss</a>
-        <a href="#">github</a>
-        <a href="#">twitter</a>
+    <footer className="footer">
+      <div>© {new Date().getFullYear()} {profile.name}</div>
+      <div>
+        <a href="#top">top ↑</a>
+        <span style={{ margin: '0 10px', color: 'var(--rule)' }}>·</span>
+        <a href="/feed.xml">rss</a>
       </div>
     </footer>
   )
 }
 
 export default function App() {
+  const [theme, toggleTheme] = useTheme()
   return (
-    <div className="page">
-      <TopNav />
-      <Hero />
-      <Socials />
-      <hr className="rule" />
-      <Writing />
-      <hr className="rule" />
-      <Projects />
-      <hr className="rule" />
-      <Newsletter />
-      <Footer />
-    </div>
+    <>
+      <StatusBar theme={theme} onToggleTheme={toggleTheme} />
+      <main className="page" id="top">
+        <Identity />
+        <About />
+        <PostsList />
+        <Footer />
+      </main>
+    </>
   )
 }
