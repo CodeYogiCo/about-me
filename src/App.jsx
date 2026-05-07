@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
-import { profile, posts, postBodies, genericBody } from './data'
-
-const visiblePosts = posts.filter((p) => !p.hidden)
+import { useEffect, useMemo, useState } from 'react'
+import { marked } from 'marked'
+import { profile } from './data'
+import { posts, visiblePosts } from './loadPosts'
 
 function useTheme() {
   const [theme, setTheme] = useState(() => {
@@ -220,25 +220,9 @@ function Footer() {
   )
 }
 
-function Body({ blocks }) {
-  return (
-    <div className="post-body">
-      {blocks.map((b, i) => {
-        if (b.type === 'p') return <p key={i}>{b.text}</p>
-        if (b.type === 'h2') return <h2 key={i}>{b.text}</h2>
-        if (b.type === 'blockquote') return <blockquote key={i}>{b.text}</blockquote>
-        if (b.type === 'ul')
-          return (
-            <ul key={i}>
-              {b.items.map((it, j) => <li key={j}>{it}</li>)}
-            </ul>
-          )
-        if (b.type === 'pre')
-          return <pre key={i}><code>{b.text}</code></pre>
-        return null
-      })}
-    </div>
-  )
+function Body({ markdown }) {
+  const html = useMemo(() => marked.parse(markdown || ''), [markdown])
+  return <div className="post-body" dangerouslySetInnerHTML={{ __html: html }} />
 }
 
 function Post({ slug }) {
@@ -246,7 +230,6 @@ function Post({ slug }) {
   const visIdx = visiblePosts.findIndex((p) => p.slug === post.slug)
   const prev = visIdx >= 0 ? visiblePosts[visIdx + 1] : undefined
   const next = visIdx >= 0 ? visiblePosts[visIdx - 1] : undefined
-  const blocks = postBodies[post.slug] || genericBody
 
   useEffect(() => {
     document.title = `${post.title} — ${profile.name}`
@@ -264,7 +247,7 @@ function Post({ slug }) {
         </div>
         <h1 className="post-title">{post.title}</h1>
         <p className="post-deck">{post.deck}</p>
-        <Body blocks={blocks} />
+        <Body markdown={post.body} />
       </article>
       <nav className="post-nav">
         <div>

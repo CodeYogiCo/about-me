@@ -1,6 +1,9 @@
-# about-me
+# codeyogico.github.io
 
-Personal site. Vite + React.
+Personal site for Vishal Vaibhav. Live at https://codeyogico.github.io/
+
+Vite + React, posts in markdown. Hosted on GitHub Pages, auto-deployed
+on every push to `main` via `.github/workflows/deploy.yml`.
 
 ## Local dev
 
@@ -16,6 +19,27 @@ npm run build    # outputs to dist/
 npm run preview  # preview the production build locally
 ```
 
-## Deploy
+## Adding a post
 
-Will be deployed to AWS (Amplify or S3 + CloudFront).
+Drop a markdown file into `src/posts/`. The filename (without `.md`)
+becomes the URL slug. Frontmatter:
+
+```markdown
+---
+date: 2026-04-22
+tag: systems
+title: My post title
+read: 8 min
+deck: A short subtitle shown under the title.
+hidden: true        # optional — excludes from index but URL still works
+---
+
+Body in markdown. Standard syntax: `## headings`, `- lists`,
+`> blockquotes`, `**bold**`, etc.
+```
+
+Posts are sorted by `date` descending in the index list.
+
+## Editing identity
+
+`src/data.jsx` holds name, role, email, linkedin, location, lastEdit.
