@@ -121,7 +121,7 @@ function About() {
       </p>
       <dl className="kv">
         <dt>currently</dt><dd>building search infrastructure</dd>
-        <dt>focus</dt><dd>distributed systems, retrieval, developer tooling</dd>
+        <dt>focus</dt><dd>distributed systems, information retrieval and ranking, developer tooling</dd>
         <dt>elsewhere</dt>
         <dd>
           <a href={profile.linkedin} target="_blank" rel="noopener">linkedin</a>
