@@ -4,6 +4,7 @@ tag: craft
 title: The cost of a good abstraction
 read: 7 min
 deck: Abstractions are loans. Pay attention to the interest rate.
+hidden: true
 ---
 
 This post is a placeholder — the full draft is still in my notebook. I'm publishing the index first and filling these in over the next few weeks.

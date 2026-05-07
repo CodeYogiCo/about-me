@@ -4,6 +4,7 @@ tag: career
 title: On being a principal engineer (and not a bottleneck)
 read: 9 min
 deck: Influence is a budget. Spend it on the things only you can do.
+hidden: true
 ---
 
 This post is a placeholder — the full draft is still in my notebook. I'm publishing the index first and filling these in over the next few weeks.

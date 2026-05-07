@@ -4,6 +4,7 @@ tag: systems
 title: "Designing for search at scale: notes from the trenches"
 read: 12 min
 deck: "What I keep relearning about index layout, query planning, and the cost of being clever."
+hidden: true
 ---
 
 I've spent most of the last decade thinking about search. The job is older than I am, the literature is enormous, and yet every system I've built has surprised me at least once. The thing that keeps surprising me is how much of search is not algorithms. It's schema. It's capacity. It's the reluctance of the world to fit into clean abstractions.

@@ -4,6 +4,7 @@ tag: ops
 title: The quiet art of capacity planning
 read: 8 min
 deck: Numbers on a napkin still beat dashboards most days.
+hidden: true
 ---
 
 This post is a placeholder — the full draft is still in my notebook. I'm publishing the index first and filling these in over the next few weeks.

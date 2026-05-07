@@ -4,6 +4,7 @@ tag: craft
 title: Writing systems for the next engineer
 read: 6 min
 deck: The code you leave behind is a letter. Make it readable.
+hidden: true
 ---
 
 This post is a placeholder — the full draft is still in my notebook. I'm publishing the index first and filling these in over the next few weeks.
