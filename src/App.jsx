@@ -155,36 +155,57 @@ function PostsList() {
   )
 }
 
-const CAT_WALK_A = ` /\\_/\\
-( ^.^ )
-//   \\\\`
+function SvgCatWalk() {
+  return (
+    <svg className="svg-cat" viewBox="0 0 92 48" width="92" height="48" aria-hidden="true">
+      <path d="M 10 22 Q 2 12 7 4" stroke="currentColor" strokeWidth="2.4" fill="none" strokeLinecap="round" />
+      <rect x="10" y="14" width="50" height="18" rx="9" fill="currentColor" />
+      <circle cx="66" cy="18" r="11" fill="currentColor" />
+      <polygon points="57,8 62,17 64,12" fill="currentColor" />
+      <polygon points="75,8 70,17 68,12" fill="currentColor" />
+      <circle cx="70" cy="17" r="1.5" fill="var(--bg)" />
+      <line x1="76" y1="20" x2="79" y2="19" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+      <g>
+        <rect className="leg leg-a" x="13" y="31" width="3.5" height="12" rx="1.2" fill="currentColor" />
+        <rect className="leg leg-b" x="20" y="31" width="3.5" height="12" rx="1.2" fill="currentColor" />
+        <rect className="leg leg-b" x="50" y="31" width="3.5" height="12" rx="1.2" fill="currentColor" />
+        <rect className="leg leg-a" x="56.5" y="31" width="3.5" height="12" rx="1.2" fill="currentColor" />
+      </g>
+    </svg>
+  )
+}
 
-const CAT_WALK_B = ` /\\_/\\
-( ^.^ )
-\\\\   //`
-
-const CAT_SIT = ` /\\_/\\
-( -.- )
- \\___/`
+function SvgCatSit() {
+  return (
+    <svg className="svg-cat svg-cat-sit" viewBox="0 0 64 60" width="64" height="60" aria-hidden="true">
+      <g className="tail">
+        <path d="M 6 50 Q -2 30 20 36" stroke="currentColor" strokeWidth="2.6" fill="none" strokeLinecap="round" />
+      </g>
+      <ellipse cx="32" cy="42" rx="17" ry="15" fill="currentColor" />
+      <circle cx="32" cy="22" r="12.5" fill="currentColor" />
+      <polygon points="21,11 26,22 30,16" fill="currentColor" />
+      <polygon points="43,11 38,22 34,16" fill="currentColor" />
+      <circle className="eye" cx="28" cy="22" r="1.5" fill="var(--bg)" />
+      <circle className="eye" cx="36" cy="22" r="1.5" fill="var(--bg)" />
+      <path d="M 30 27 Q 32 29 34 27" stroke="var(--bg)" strokeWidth="0.9" fill="none" strokeLinecap="round" />
+      <rect x="24" y="50" width="4" height="7" rx="1.6" fill="currentColor" />
+      <rect x="36" y="50" width="4" height="7" rx="1.6" fill="currentColor" />
+    </svg>
+  )
+}
 
 function Cat() {
   const [phase, setPhase] = useState('walk')
-  const [frame, setFrame] = useState(0)
-
-  useEffect(() => {
-    if (phase !== 'walk') return
-    const id = setInterval(() => setFrame((f) => (f + 1) % 2), 260)
-    return () => clearInterval(id)
-  }, [phase])
 
   useEffect(() => {
     const t = setTimeout(() => setPhase('sit'), 5200)
     return () => clearTimeout(t)
   }, [])
 
-  const ascii = phase === 'sit' ? CAT_SIT : frame === 0 ? CAT_WALK_A : CAT_WALK_B
   return (
-    <pre className={`cat cat-${phase}`} aria-hidden="true">{ascii}</pre>
+    <div className={`cat cat-${phase}`} aria-hidden="true">
+      {phase === 'walk' ? <SvgCatWalk /> : <SvgCatSit />}
+    </div>
   )
 }
 

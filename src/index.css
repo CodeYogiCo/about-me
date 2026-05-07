@@ -349,24 +349,20 @@ a:hover {
 }
 .fn:hover .note { opacity: 1; }
 
-/* ── ascii cat ─────────────────────────────────────────── */
+/* ── svg cat ───────────────────────────────────────────── */
 
 .cat {
   position: fixed;
-  bottom: 18px;
+  bottom: 14px;
   right: 22px;
-  margin: 0;
-  padding: 0;
-  font-family: var(--mono);
-  font-size: 11px;
-  line-height: 1.05;
-  color: var(--ink-soft);
-  white-space: pre;
   pointer-events: none;
   z-index: 10;
-  opacity: 0.75;
-  text-align: left;
+  color: var(--ink-soft);
+  opacity: 0.85;
+  line-height: 0;
 }
+.svg-cat { display: block; }
+
 .cat-walk {
   animation: cat-walk 5.2s linear forwards;
 }
@@ -382,8 +378,41 @@ a:hover {
   50%      { transform: translateY(-1px); }
 }
 
+@keyframes leg-step-a {
+  0%, 49.9% { transform: translateY(-2.5px); }
+  50%, 100% { transform: translateY(0); }
+}
+@keyframes leg-step-b {
+  0%, 49.9% { transform: translateY(0); }
+  50%, 100% { transform: translateY(-2.5px); }
+}
+.svg-cat .leg-a { animation: leg-step-a 0.42s steps(2, end) infinite; }
+.svg-cat .leg-b { animation: leg-step-b 0.42s steps(2, end) infinite; }
+
+.svg-cat .tail {
+  transform-box: fill-box;
+  transform-origin: 95% 95%;
+  animation: tail-wag 2.6s ease-in-out infinite;
+}
+@keyframes tail-wag {
+  0%, 100% { transform: rotate(0deg); }
+  50%      { transform: rotate(-10deg); }
+}
+
+.svg-cat .eye {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: blink 5.4s infinite;
+}
+@keyframes blink {
+  0%, 92%, 100% { transform: scaleY(1); }
+  95%           { transform: scaleY(0.1); }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .cat-walk, .cat-sit { animation: none; }
+  .cat-walk, .cat-sit,
+  .svg-cat .leg-a, .svg-cat .leg-b,
+  .svg-cat .tail, .svg-cat .eye { animation: none; }
 }
 @media (max-width: 640px) {
   .cat { display: none; }
