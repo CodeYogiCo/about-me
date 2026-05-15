@@ -29,7 +29,9 @@ We open-sourced it eventually. It got more use than I expected, which felt good.
 
 Seven years is a long time in tooling. The same idea — diff-aware coverage — is now built into every major coverage tool, every CI provider, every code review platform. Codecov, SonarQube, Coveralls, GitHub's own checks all do it natively, with better integrations and a fraction of the setup our library needed.
 
-When the better-supported alternatives exist, the right move is to send people there. Maintaining a library because you wrote it isn't a reason. It's a habit.
+And honestly: we couldn't keep up. The ecosystem moved fast. The original maintainers moved on to other work. Patches stalled, integrations lagged, the docs drifted. That's how most small open-source tools end — not with a decision, but with a slow loss of velocity.
+
+When the better-supported alternatives exist and you can't give a tool the attention it deserves, the right move is to send people there. Maintaining a library because you wrote it isn't a reason. It's a habit.
 
 ## what it taught me
 
