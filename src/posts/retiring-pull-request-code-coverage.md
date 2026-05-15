@@ -42,4 +42,6 @@ Two things have stuck:
 
 To the people who used it, contributed, filed issues, sent patches — thank you. To the principal engineer who wrote that first commit: you were right.
 
+The repo: [github.com/target/pull-request-code-coverage](https://github.com/target/pull-request-code-coverage)
+
 — v
