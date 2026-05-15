@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Aerospike as a High-Performance Feature Store for Real-Time Search Ranking</title>
+  <style>
+    /* ── Reset & base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --accent:   #C8102E;   /* Aerospike red */
+      --accent2:  #1A1A2E;   /* deep navy */
+      --text:     #1a1a1a;
+      --muted:    #555;
+      --border:   #e0e0e0;
+      --code-bg:  #f5f5f5;
+      --th-bg:    #1A1A2E;
+      --th-fg:    #ffffff;
+      --tr-alt:   #f9f9f9;
+      --body-font: 'Georgia', 'Times New Roman', serif;
+      --mono-font: 'Courier New', Courier, monospace;
+      --sans-font: 'Helvetica Neue', Arial, sans-serif;
+    }
+
+    @page {
+      size: A4;
+      margin: 20mm 18mm 22mm 18mm;
+    }
+
+    html { font-size: 10pt; }
+
+    body {
+      font-family: var(--body-font);
+      color: var(--text);
+      line-height: 1.7;
+      background: #fff;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 40px 48px;
+    }
+
+    /* ── Cover / title block ── */
+    .cover {
+      border-top: 6px solid var(--accent);
+      padding-top: 36px;
+      margin-bottom: 40px;
+    }
+
+    .cover .label {
+      font-family: var(--sans-font);
+      font-size: 8pt;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 14px;
+    }
+
+    .cover h1 {
+      font-family: var(--sans-font);
+      font-size: 24pt;
+      font-weight: 800;
+      color: var(--accent2);
+      line-height: 1.2;
+      margin-bottom: 20px;
+    }
+
+    .cover h1 span { color: var(--accent); }
+
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin-top: 28px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+    }
+
+    .meta-item .key {
+      font-family: var(--sans-font);
+      font-size: 7pt;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 3px;
+    }
+
+    .meta-item .val {
+      font-family: var(--sans-font);
+      font-size: 9pt;
+      font-weight: 600;
+      color: var(--accent2);
+    }
+
+    /* ── TOC ── */
+    .toc {
+      background: #f7f7f9;
+      border-left: 4px solid var(--accent);
+      padding: 22px 26px;
+      margin-bottom: 40px;
+      page-break-inside: avoid;
+    }
+
+    .toc h2 {
+      font-family: var(--sans-font);
+      font-size: 9pt;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 14px;
+    }
+
+    .toc ol {
+      padding-left: 18px;
+    }
+
+    .toc li {
+      font-family: var(--sans-font);
+      font-size: 9pt;
+      color: var(--accent2);
+      margin-bottom: 5px;
+    }
+
+    .toc li span {
+      color: var(--muted);
+      font-size: 8pt;
+    }
+
+    /* ── Section headings ── */
+    h2 {
+      font-family: var(--sans-font);
+      font-size: 14pt;
+      font-weight: 800;
+      color: var(--accent2);
+      margin-top: 44px;
+      margin-bottom: 14px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--accent);
+      page-break-after: avoid;
+    }
+
+    h2 .num {
+      color: var(--accent);
+      margin-right: 6px;
+    }
+
+    h3 {
+      font-family: var(--sans-font);
+      font-size: 11pt;
+      font-weight: 700;
+      color: var(--accent2);
+      margin-top: 28px;
+      margin-bottom: 10px;
+      page-break-after: avoid;
+    }
+
+    h4 {
+      font-family: var(--sans-font);
+      font-size: 10pt;
+      font-weight: 700;
+      color: var(--muted);
+      margin-top: 20px;
+      margin-bottom: 8px;
+      page-break-after: avoid;
+    }
+
+    /* ── Body text ── */
+    p { margin-bottom: 12px; }
+
+    strong { font-weight: 700; }
+
+    /* ── Code blocks ── */
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      padding: 14px 16px;
+      margin: 16px 0;
+      overflow-x: auto;
+      font-family: var(--mono-font);
+      font-size: 8pt;
+      line-height: 1.55;
+      page-break-inside: avoid;
+      white-space: pre;
+    }
+
+    code {
+      font-family: var(--mono-font);
+      font-size: 8.5pt;
+      background: var(--code-bg);
+      padding: 1px 4px;
+      border-radius: 2px;
+    }
+
+    pre code { background: none; padding: 0; font-size: 8pt; }
+
+    /* ── Tables ── */
+    .table-wrap { overflow-x: auto; margin: 18px 0; page-break-inside: avoid; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: var(--sans-font);
+      font-size: 8.5pt;
+    }
+
+    thead tr { background: var(--th-bg); color: var(--th-fg); }
+    thead th {
+      padding: 9px 12px;
+      text-align: left;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+
+    tbody tr:nth-child(even) { background: var(--tr-alt); }
+
+    tbody td {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+
+    /* ── Callout boxes ── */
+    .callout {
+      background: #fff8f8;
+      border: 1px solid #f5c0c0;
+      border-left: 4px solid var(--accent);
+      padding: 14px 18px;
+      margin: 20px 0;
+      font-family: var(--sans-font);
+      font-size: 9pt;
+      page-break-inside: avoid;
+    }
+
+    .callout strong { color: var(--accent); }
+
+    .info-box {
+      background: #f0f4ff;
+      border: 1px solid #c0ccf0;
+      border-left: 4px solid var(--accent2);
+      padding: 14px 18px;
+      margin: 20px 0;
+      font-family: var(--sans-font);
+      font-size: 9pt;
+      page-break-inside: avoid;
+    }
+
+    /* ── Lists ── */
+    ul, ol {
+      padding-left: 22px;
+      margin-bottom: 12px;
+    }
+
+    li { margin-bottom: 5px; }
+
+    /* ── Divider ── */
+    hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 36px 0;
+    }
+
+    /* ── Diagram / ASCII art ── */
+    .diagram {
+      background: var(--accent2);
+      color: #e8eaf6;
+      padding: 18px 20px;
+      margin: 18px 0;
+      font-family: var(--mono-font);
+      font-size: 7.5pt;
+      line-height: 1.5;
+      border-radius: 2px;
+      page-break-inside: avoid;
+      white-space: pre;
+    }
+
+    /* ── Footer ── */
+    footer {
+      margin-top: 56px;
+      padding-top: 16px;
+      border-top: 2px solid var(--accent);
+      font-family: var(--sans-font);
+      font-size: 7.5pt;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    /* ── Print overrides ── */
+    @media print {
+      body { padding: 0; max-width: 100%; }
+      .cover { page-break-after: always; }
+      .toc   { page-break-after: always; }
+      h2 { page-break-before: auto; }
+      pre, .diagram, .callout, .info-box, table { page-break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════  COVER  ═══════════════════════════ -->
+<div class="cover">
+  <div class="label">Technical White Paper &mdash; Search Ranking Infrastructure</div>
+  <h1>Aerospike as a<br><span>High-Performance Feature Store</span><br>for Real-Time Search Ranking</h1>
+  <p style="font-family:var(--sans-font);font-size:10pt;color:var(--muted);max-width:580px;line-height:1.6;">
+    A principal-engineer perspective on feature store architecture, the economics
+    of online serving at scale, and why Aerospike's Hybrid Memory Architecture
+    outperforms pure in-memory solutions for ranking workloads.
+  </p>
+  <div class="meta-grid">
+    <div class="meta-item"><div class="key">Author</div><div class="val">Principal Engineer, Search Platform</div></div>
+    <div class="meta-item"><div class="key">Domain</div><div class="val">Search Ranking Infrastructure</div></div>
+    <div class="meta-item"><div class="key">Audience</div><div class="val">Staff / Principal Engineers, ML Platform</div></div>
+    <div class="meta-item"><div class="key">Version</div><div class="val">1.0</div></div>
+    <div class="meta-item"><div class="key">Status</div><div class="val">Published</div></div>
+    <div class="meta-item"><div class="key">Date</div><div class="val">May 2026</div></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════  TOC  ═══════════════════════════ -->
+<div class="toc">
+  <h2>Table of Contents</h2>
+  <ol>
+    <li>Introduction: What Is a Feature Store and Why It Matters</li>
+    <li>Feature Stores in the Search Ranking Stack
+      <span>&mdash; pipeline overview, feature taxonomy, latency budget, freshness</span>
+    </li>
+    <li>Why Aerospike
+      <span>&mdash; problem with naive solutions, value proposition</span>
+    </li>
+    <li>Aerospike Architecture Deep Dive
+      <span>&mdash; HMA, data model, batch reads, clustering, write paths, TTL, XDR</span>
+    </li>
+    <li>Aerospike vs. Redis: Decision Framework
+      <span>&mdash; comparison matrix, when each is right, our decision rationale</span>
+    </li>
+    <li>Operational Considerations
+      <span>&mdash; client config, failure modes, monitoring</span>
+    </li>
+    <li>Summary and Recommendations</li>
+  </ol>
+</div>
+
+<!-- ═══════════════════════  SECTION 1  ═══════════════════════ -->
+<h2><span class="num">1.</span>Introduction: What Is a Feature Store and Why It Matters</h2>
+
+<p>
+  A <strong>feature store</strong> is a centralized data system purpose-built to manage the lifecycle
+  of machine learning features — from offline computation to online serving. It bridges the gap
+  between batch data pipelines and real-time inference, providing a single source of truth for
+  feature values consumed by both training and serving paths.
+</p>
+
+<p>At its core, a feature store must satisfy two competing contracts simultaneously:</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Contract</th><th>Requirement</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Offline store</strong></td><td>High-throughput historical reads for model training and backfills</td></tr>
+    <tr><td><strong>Online store</strong></td><td>Sub-millisecond point lookups at high QPS under strict p99 SLAs</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  The tension is fundamental. Training jobs need columnar scans over billions of rows; serving
+  systems need single-key reads at millions of requests per second. Most systems resolve this by
+  running two separate stores — a columnar warehouse (e.g., BigQuery, Hive, Parquet on S3) for the
+  offline path and a low-latency KV store for the online path, with a materialization pipeline
+  syncing between them.
+</p>
+
+<div class="info-box">
+  This white paper focuses exclusively on the <strong>online feature store tier</strong> and how we
+  use Aerospike to serve real-time features into search ranking.
+</div>
+
+<!-- ═══════════════════════  SECTION 2  ═══════════════════════ -->
+<h2><span class="num">2.</span>Feature Stores in the Search Ranking Stack</h2>
+
+<h3>2.1 The Ranking Pipeline at a Glance</h3>
+
+<p>Search ranking is a multi-stage retrieval and scoring pipeline:</p>
+
+<div class="diagram">Query
+  │
+  ▼
+[Recall / ANN Retrieval]      ← sparse (BM25) + dense (HNSW / ScaNN)
+  │
+  ▼
+[L1 Lightweight Ranker]       ← fast, low-dimensional features
+  │
+  ▼
+[L2 Full Ranker]              ← deep ML model (GBDT, DNN, or LTR)
+  │                              ← feature store read happens here
+  ▼
+[Post-Ranker / Business Logic]
+  │
+  ▼
+Results</div>
+
+<p>
+  At <strong>L2</strong> — the full ranker — we consume hundreds of features per (query, document) pair.
+  These features fall into three categories:
+</p>
+
+<h4>2.1.1 Query-side Features</h4>
+<p>Real-time signals derived from the query and session context:</p>
+<ul>
+  <li>Query intent embedding (dense vector from query encoder)</li>
+  <li>Query historical CTR, query popularity percentile</li>
+  <li>User's session context: recent clicks, dwell time, zero-result history</li>
+  <li>User's long-term behavioral segments (categorical + continuous)</li>
+</ul>
+
+<h4>2.1.2 Document-side Features</h4>
+<p>Pre-computed signals about each candidate document:</p>
+<ul>
+  <li>Document quality score (freshness-adjusted PageRank equivalent)</li>
+  <li>Engagement statistics: CTR@k, NDCG contribution, dwell time distribution</li>
+  <li>Content signals: keyword density, entity coverage, recency</li>
+  <li>Business signals: seller trust score, inventory status, revenue tier</li>
+</ul>
+
+<h4>2.1.3 Cross Features</h4>
+<p>Interaction signals between query and document:</p>
+<ul>
+  <li>Historical (query, document) co-occurrence CTR</li>
+  <li>Semantic similarity bin (bucketed cosine distance)</li>
+  <li>Category affinity score</li>
+</ul>
+
+<h3>2.2 Latency Budget Constraints</h3>
+
+<p>
+  A production search system's end-to-end SLA is typically 200–300ms. The L2 ranker's allocated
+  budget is 30–50ms total, of which <strong>feature retrieval must consume no more than 5–10ms at p99</strong>.
+  This is non-negotiable — every millisecond of budget overage either degrades user experience or
+  forces retrieval cutoffs that hurt recall.
+</p>
+
+<p>At a typical L2 cutoff of 200–500 candidates, we issue:</p>
+<ul>
+  <li><strong>1</strong> query-side lookup (keyed by <code>user_id</code> or <code>session_id</code>)</li>
+  <li><strong>200–500</strong> document-side lookups (keyed by <code>doc_id</code>)</li>
+  <li><strong>Up to N</strong> cross-feature lookups (keyed by <code>(query_hash, doc_id)</code>)</li>
+</ul>
+
+<p>That is <strong>200–1000 individual key lookups per search request</strong>, at tens of thousands of QPS globally. The online feature store must sustain:</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Metric</th><th>Requirement</th></tr></thead>
+  <tbody>
+    <tr><td>Throughput</td><td>1M+ reads/sec sustained, 10M+ peak</td></tr>
+    <tr><td>Latency</td><td>p50 &lt; 1ms, p99 &lt; 5ms, p999 &lt; 10ms</td></tr>
+    <tr><td>Availability</td><td>99.99%+</td></tr>
+    <tr><td>Data size</td><td>Terabytes (not DRAM-friendly at scale)</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3>2.3 Feature Freshness Requirements</h3>
+
+<p>Not all features carry the same freshness tolerance:</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Feature Class</th><th>Freshness Requirement</th><th>Update Frequency</th></tr></thead>
+  <tbody>
+    <tr><td>Real-time engagement (CTR last 1h)</td><td>&lt; 5 min stale</td><td>Streaming (Kafka → Flink)</td></tr>
+    <tr><td>Session context</td><td>&lt; 30s stale</td><td>Event-driven write-through</td></tr>
+    <tr><td>Daily aggregates</td><td>&lt; 24h stale</td><td>Batch (Spark job)</td></tr>
+    <tr><td>Static document signals</td><td>Up to 7 days tolerance</td><td>Periodic recompute</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>
+  The feature store must handle <strong>both streaming micro-batch writes and bulk batch upserts</strong>
+  without impacting read latency.
+</p>
+
+<!-- ═══════════════════════  SECTION 3  ═══════════════════════ -->
+<h2><span class="num">3.</span>Why Aerospike</h2>
+
+<h3>3.1 The Problem With Naive Solutions</h3>
+
+<p>Before committing to Aerospike, we evaluated the conventional alternatives:</p>
+
+<p>
+  <strong>Redis (standalone or Redis Cluster):</strong> Redis is the default go-to for low-latency KV.
+  It delivers excellent throughput for DRAM-resident data. However, at our data volumes — terabytes
+  of pre-computed features — the economics break down fast. All data must live in DRAM. At $3–5/GB/month
+  for memory-optimized EC2 instances, storing 5TB of feature data runs into millions of dollars annually
+  just for the memory tier. Horizontal sharding across hundreds of Redis shards introduces operational
+  complexity and cross-shard coordination overhead.
+</p>
+
+<p>
+  <strong>DynamoDB / Cassandra:</strong> Suitable for large data volumes but latency characteristics
+  are wrong for our SLA. p99 latencies on DynamoDB regularly hit 10–20ms under real traffic.
+  Cassandra is better-tuned but still oriented toward durability over microsecond retrieval.
+</p>
+
+<p>
+  <strong>In-process cache:</strong> Each ranking service instance maintains a local LRU cache.
+  This works for hot documents but thrashes on the long tail. In search ranking, the bottom 80%
+  of documents account for most traffic by query diversity.
+</p>
+
+<h3>3.2 Aerospike's Value Proposition</h3>
+
+<p>
+  Aerospike's design philosophy solves exactly the tradeoff we face: <strong>DRAM-speed reads for
+  hot data, SSD-persisted capacity for the long tail, at a fraction of the cost of pure DRAM solutions.</strong>
+</p>
+
+<p>Three architectural decisions make Aerospike uniquely suited for this use case:</p>
+
+<ol>
+  <li><strong>Hybrid Memory Architecture (HMA)</strong> — indexes live in DRAM; values live on NVMe SSDs. Read paths are single I/O operations.</li>
+  <li><strong>Native multi-row batch reads</strong> — a single RPC can fetch hundreds of keys with minimal per-key overhead.</li>
+  <li><strong>Strong consistency with configurable replication</strong> — feature writes from Flink pipelines are durably committed, not fire-and-forget.</li>
+</ol>
+
+<!-- ═══════════════════════  SECTION 4  ═══════════════════════ -->
+<h2><span class="num">4.</span>Aerospike Architecture Deep Dive</h2>
+
+<h3>4.1 Storage Architecture: Hybrid Memory Architecture (HMA)</h3>
+
+<p>
+  The foundational innovation in Aerospike is the separation of the <strong>primary index</strong>
+  from <strong>record data</strong>:
+</p>
+
+<div class="diagram">┌─────────────────────────────────────────────────────────┐
+│                         DRAM                            │
+│                                                         │
+│  Primary Index (in-memory red-black tree per partition) │
+│  ┌─────────────────────────────────────────────────┐   │
+│  │  key hash → { device_id, file_id, offset, size }│   │
+│  └─────────────────────────────────────────────────┘   │
+│                                                         │
+│  Row Cache (optional, LRU, configurable size)           │
+└─────────────────────────────────────────────────────────┘
+                          │
+                          │  single direct I/O
+                          ▼
+┌─────────────────────────────────────────────────────────┐
+│                     NVMe SSD Layer                      │
+│                                                         │
+│  Aerospike Storage Engine (log-structured)              │
+│  ┌────────────┐  ┌────────────┐  ┌────────────┐       │
+│  │  Partition │  │  Partition │  │  Partition │  ...  │
+│  │   File 0   │  │   File 1   │  │   File 2   │       │
+│  └────────────┘  └────────────┘  └────────────┘       │
+└─────────────────────────────────────────────────────────┘</div>
+
+<p><strong>Why this matters for us:</strong></p>
+<p>
+  The primary index for our entire document feature dataset (billions of documents) fits in DRAM
+  because it only stores the <em>pointer</em> to the record, not the record itself. A typical index
+  entry is ~64 bytes. At 10B documents, that is ~640GB of DRAM for the index — distributed across
+  a cluster, ~20–40 nodes at 32GB DRAM each. The multi-terabyte feature payload lives on NVMe,
+  which at $0.10/GB/month is <strong>30–50× cheaper than DRAM</strong>.
+</p>
+
+<p>A read operation proceeds as follows:</p>
+<ol>
+  <li>Hash the key → locate the index entry in DRAM <em>(nanoseconds)</em></li>
+  <li>Resolve device offset from index entry</li>
+  <li>Issue a single <code>pread()</code> direct I/O call to NVMe <em>(50–150µs on modern NVMe)</em></li>
+</ol>
+
+<div class="callout">
+  <strong>Key insight:</strong> Direct I/O bypasses the OS page cache (no double buffering).
+  Aerospike pre-allocates storage in large contiguous extents to minimize fragmentation and
+  seek overhead. This is what makes sub-millisecond reads from SSD achievable in practice.
+</div>
+
+<h3>4.2 Data Model</h3>
+
+<p>Aerospike uses a <strong>namespace → set → record</strong> hierarchy analogous to <em>database → table → row</em>:</p>
+
+<pre>Namespace: "feature_store"
+  ├── Set: "user_features"
+  │     Key: user_id (string or integer digest)
+  │     Bins: { "ctr_1h": 0.031, "session_depth": 4, "query_vec": [0.1, 0.4, ...] }
+  │
+  ├── Set: "doc_features"
+  │     Key: doc_id
+  │     Bins: { "quality_score": 0.87, "ctr_7d": 0.024, "freshness": 0.95 }
+  │
+  └── Set: "cross_features"
+        Key: sha256(query_hash + doc_id)
+        Bins: { "hist_ctr": 0.015, "sem_sim_bin": 3 }</pre>
+
+<p>
+  Bins are strongly typed: integer, double, string, blob, list, map, CDT (Collection Data Types).
+  This means we can store complex feature values like embedding vectors (as blob or list) without
+  extra serialization overhead on the client.
+</p>
+
+<h3>4.3 Batch Read Path</h3>
+
+<p>
+  The killer feature for our use case is <strong>native batch reads</strong>. A single batch read
+  RPC to Aerospike can contain hundreds of keys, routed to their respective cluster nodes in parallel:
+</p>
+
+<pre>// Aerospike Python client — batch read
+keys = [
+    ("feature_store", "doc_features", doc_id)
+    for doc_id in candidate_doc_ids   # 200–500 doc IDs
+]
+
+records = client.get_many(keys)
+# Returns list of (key, metadata, bins) tuples
+# Single round-trip per node in the cluster</pre>
+
+<p>
+  Internally, the client partitions keys by which cluster node owns them (consistent hashing via
+  RIPEMD-160 digest), sends one request per node in parallel, and reassembles the responses.
+  For a 10-node cluster with uniform distribution, a 500-key batch requires <strong>10 parallel
+  RPCs instead of 500 sequential ones</strong>. This reduces round-trip amplification by 50×.
+</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Operation</th><th>Median</th><th>p99</th></tr></thead>
+  <tbody>
+    <tr><td>500-key batch read</td><td>2.1ms</td><td>6.8ms</td></tr>
+    <tr><td>100-key batch read</td><td>0.8ms</td><td>2.9ms</td></tr>
+    <tr><td>Single-key read</td><td>0.3ms</td><td>1.1ms</td></tr>
+  </tbody>
+</table>
+</div>
+<p style="font-size:8pt;color:var(--muted);font-family:var(--sans-font);">Measured over 10GbE within the same AZ on a 10-node production cluster.</p>
+
+<h3>4.4 Cluster Architecture and Replication</h3>
+
+<p>
+  Aerospike uses a <strong>shared-nothing, masterless</strong> architecture based on a Paxos-derived
+  clustering protocol:
+</p>
+
+<div class="diagram">┌─────────┐    ┌─────────┐    ┌─────────┐
+│  Node 1 │────│  Node 2 │────│  Node 3 │
+│ (AS-1)  │    │ (AS-2)  │    │ (AS-3)  │
+└─────────┘    └─────────┘    └─────────┘
+     │               │               │
+  Partition       Partition       Partition
+  [0..1023]      [1024..2047]    [2048..3071]
+  + replicas      + replicas      + replicas</div>
+
+<p>
+  Each namespace is divided into <strong>4096 partitions</strong>. With replication factor 2, each
+  partition has a <em>master</em> and one <em>replica</em>. Writes go to the master and either
+  synchronously replicate to the replica before acknowledging (<code>COMMIT_ALL</code> — strong
+  consistency) or asynchronously (<code>COMMIT_MASTER</code> — lower write latency).
+</p>
+
+<p>For feature store writes from our Flink streaming pipeline:</p>
+<ul>
+  <li>Replication factor = 2 cluster-wide</li>
+  <li><code>COMMIT_ALL</code> for session features (strong consistency required)</li>
+  <li><code>COMMIT_MASTER</code> for bulk batch-loaded document features (throughput over strict consistency)</li>
+</ul>
+
+<h3>4.5 Write Paths: Streaming vs. Batch Ingestion</h3>
+
+<h4>Streaming path (Flink → Aerospike)</h4>
+<p>
+  Real-time features are emitted by Flink jobs consuming from Kafka. Each Flink task manager
+  runs an Aerospike client and issues individual or small-batch writes:
+</p>
+
+<pre>Kafka Topic: user_engagement_events
+    │
+    ▼
+Flink: aggregate CTR per (user_id, query_category)
+       over 1h tumbling window
+    │
+    ▼
+Aerospike Sink: upsert to "user_features" set
+    policy: upsertOnly, TTL=86400s, generation check disabled</pre>
+
+<p>
+  Write throughput from our Flink fleet: <strong>sustained 80K writes/sec, peak 300K/sec</strong>
+  during traffic spikes. Aerospike handles this without backpressure.
+</p>
+
+<h4>Batch path (Spark → Aerospike)</h4>
+<p>
+  Daily document feature recomputation runs as a Spark job that reads from Hive/Parquet and
+  bulk-loads into Aerospike via the Aerospike Spark Connector:
+</p>
+
+<pre>df.write \
+  .format("aerospike") \
+  .option("aerospike.seedhost", "aerospike-cluster:3000") \
+  .option("aerospike.namespace", "feature_store") \
+  .option("aerospike.set", "doc_features") \
+  .option("aerospike.updateByKey", "doc_id") \
+  .save()
+
+# Throughput: ~1.2M records/sec across a 20-node cluster</pre>
+
+<h3>4.6 Expiry and TTL Management</h3>
+
+<p>
+  Feature freshness is enforced at the storage level via per-record TTL. Aerospike's background
+  vacuum thread evicts expired records without impacting read latency:
+</p>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Feature Type</th><th>TTL Setting</th><th>Rationale</th></tr></thead>
+  <tbody>
+    <tr><td>Session features</td><td>3600s (1h)</td><td>Auto-evicted when stale</td></tr>
+    <tr><td>Real-time engagement</td><td>300s (5m)</td><td>Short freshness window</td></tr>
+    <tr><td>Document features (batch)</td><td>0 (no expiry)</td><td>Managed by batch refresh cycle</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>This removes the need for a separate cache invalidation system.</p>
+
+<h3>4.7 Cross-Datacenter Replication (XDR)</h3>
+
+<p>
+  Aerospike's built-in <strong>Cross-Datacenter Replication (XDR)</strong> enables asynchronous
+  replication between geographic regions:
+</p>
+
+<ul>
+  <li>Primary cluster in <code>us-east-1</code> (write source)</li>
+  <li>Replica clusters in <code>eu-west-1</code> and <code>ap-southeast-1</code> (read-optimized)</li>
+  <li>XDR lag: typically 50–200ms — within our feature freshness SLAs</li>
+</ul>
+
+<p>
+  Ranking services in each region read from their local Aerospike cluster, keeping feature reads
+  within the same AZ and eliminating cross-region read latency.
+</p>
+
+<!-- ═══════════════════════  SECTION 5  ═══════════════════════ -->
+<h2><span class="num">5.</span>Aerospike vs. Redis: Decision Framework</h2>
+
+<h3>5.1 Technical Comparison Matrix</h3>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Dimension</th><th>Redis Cluster</th><th>Aerospike</th></tr></thead>
+  <tbody>
+    <tr><td>Primary storage</td><td>All data in DRAM</td><td>Index in DRAM, data on NVMe</td></tr>
+    <tr><td>Single-key read latency</td><td>0.1–0.3ms</td><td>0.3–1.0ms</td></tr>
+    <tr><td>Batch read (multi-node)</td><td>Client-side shard coordination</td><td>Native parallel batch, single RPC</td></tr>
+    <tr><td>Data size scalability</td><td>Expensive — must fit in DRAM</td><td>Excellent — NVMe at 1/30th the cost</td></tr>
+    <tr><td>Write throughput</td><td>High (DRAM-backed)</td><td>High (log-structured NVMe)</td></tr>
+    <tr><td>Strong consistency</td><td>Eventual by default</td><td>Configurable per-operation</td></tr>
+    <tr><td>Native multi-node batch</td><td>No</td><td>Yes</td></tr>
+    <tr><td>TTL granularity</td><td>Per-key</td><td>Per-record</td></tr>
+    <tr><td>Cross-DC replication</td><td>Redis Enterprise only (paid)</td><td>Built-in XDR (open source)</td></tr>
+    <tr><td>Cluster rebalancing</td><td>Manual resharding</td><td>Automatic on node add/remove</td></tr>
+    <tr><td>Cost at 5TB dataset</td><td>~$500K+/yr (DRAM only)</td><td>~$50K/yr (NVMe + DRAM index)</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3>5.2 When Redis Is Still the Right Choice</h3>
+
+<ul>
+  <li><strong>Dataset fits comfortably in DRAM (&lt; 50GB)</strong> — Redis DRAM-native reads (0.1ms) are faster and operationally simpler.</li>
+  <li><strong>Rich data structure operations are required</strong> — Sorted sets (ZADD/ZRANGE), HyperLogLog, Pub/Sub — no Aerospike equivalent.</li>
+  <li><strong>Absolute minimum latency (p99 &lt; 1ms)</strong> — For use cases requiring sub-millisecond p99 on every single read, Redis DRAM wins.</li>
+  <li><strong>Team has deep Redis expertise</strong> — Operational familiarity has real cost; don't switch without accounting for it.</li>
+</ul>
+
+<h3>5.3 When Aerospike Is the Right Choice</h3>
+
+<ul>
+  <li><strong>Data volume exceeds DRAM economics</strong> — Above 100GB, Aerospike's hybrid storage makes it economically viable. Above 1TB, there is no contest.</li>
+  <li><strong>Batch reads across large candidate sets</strong> — Ranking 500 documents per query with a single batch RPC is Aerospike's native pattern.</li>
+  <li><strong>Strong cross-datacenter replication without a paid tier</strong> — Aerospike XDR is open-source. Redis active-active geo-distribution requires Redis Enterprise.</li>
+  <li><strong>Streaming writes and batch bulk loads coexist</strong> — Aerospike handles both concurrently. Redis requires operational separation (write-through cache + separate persistence layer).</li>
+  <li><strong>Long-tail data access patterns</strong> — In search ranking, most documents are low-frequency. DRAM caches thrash on the long tail. Aerospike's NVMe tier handles arbitrary access patterns at low latency.</li>
+  <li><strong>Operational scalability</strong> — Aerospike rebalances automatically when nodes are added. Redis Cluster resharding is a manual operational event with risk.</li>
+</ul>
+
+<h3>5.4 Our Decision Rationale</h3>
+
+<p>
+  Our document feature dataset at the time of migration was <strong>2.8TB and growing at 400GB/quarter</strong>.
+  A Redis cluster to hold this would require approximately 280 <code>r6g.2xlarge</code> nodes
+  (64GB DRAM each, with headroom). At $0.504/hr per node, that is <strong>$1.1M/year in compute alone</strong>.
+</p>
+
+<p>
+  Our Aerospike cluster serving the same data: <strong>24 nodes</strong> with 2TB NVMe each, 32GB
+  DRAM per node for index. Total NVMe: 48TB (headroom for 2× growth). Cost: <strong>~$180K/year</strong>.
+</p>
+
+<div class="callout">
+  <strong>Result:</strong> 83% infrastructure cost reduction. Batch read p99 improved from 12ms
+  (Redis pipelining across shards) to 6.8ms (Aerospike native batch), because we eliminated the
+  client-side shard coordination layer entirely.
+</div>
+
+<!-- ═══════════════════════  SECTION 6  ═══════════════════════ -->
+<h2><span class="num">6.</span>Operational Considerations</h2>
+
+<h3>6.1 Client Configuration</h3>
+
+<pre>config = {
+    'hosts': [('aerospike-cluster-seed', 3000)],
+    'policies': {
+        'read': {
+            'max_retries':    2,
+            'total_timeout':  5,       # 5ms total timeout
+            'socket_timeout': 3,       # 3ms socket timeout
+            'replica': aerospike.POLICY_REPLICA_MASTER,
+        },
+        'batch': {
+            'max_retries':   1,
+            'total_timeout': 10,       # 10ms for large batches
+        }
+    },
+    'max_conns_per_node': 100,
+    'min_conns_per_node': 10,
+    'tend_interval':      500,         # cluster state check every 500ms
+}</pre>
+
+<h3>6.2 Failure Modes and Mitigation</h3>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Failure Mode</th><th>Impact</th><th>Mitigation</th></tr></thead>
+  <tbody>
+    <tr><td>Node loss</td><td>Reads fail for partitions without replica</td><td>RF=2; automatic failover</td></tr>
+    <tr><td>NVMe failure</td><td>Data loss for primary partitions on that node</td><td>RAID-1 at OS level or RF=3</td></tr>
+    <tr><td>Batch read timeout</td><td>Feature retrieval fails for request</td><td>Circuit breaker + default feature values in ranker</td></tr>
+    <tr><td>XDR lag spike</td><td>Stale features in replica region</td><td>Monitor XDR latency; alert on lag &gt; 10s</td></tr>
+    <tr><td>Flink write surge</td><td>Write latency increase</td><td>Backpressure in Flink Aerospike sink; write timeout tuning</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h3>6.3 Monitoring Checklist</h3>
+
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Metric</th><th>Purpose</th></tr></thead>
+  <tbody>
+    <tr><td><code>aerospike.read.latency.p99</code></td><td>Primary SLA metric</td></tr>
+    <tr><td><code>aerospike.batch.size.histogram</code></td><td>Track drift in batch sizes</td></tr>
+    <tr><td><code>aerospike.error.rate</code></td><td>Separate key-not-found vs. server errors</td></tr>
+    <tr><td><code>aerospike.storage.used_pct</code> per node</td><td>Capacity planning</td></tr>
+    <tr><td><code>aerospike.xdr.lag_ms</code> per destination</td><td>Cross-DC replication health</td></tr>
+    <tr><td><code>aerospike.memory.index_used_pct</code></td><td>DRAM headroom for index growth</td></tr>
+  </tbody>
+</table>
+</div>
+
+<!-- ═══════════════════════  SECTION 7  ═══════════════════════ -->
+<h2><span class="num">7.</span>Summary and Recommendations</h2>
+
+<p>
+  Aerospike as an online feature store in the search ranking stack delivers the rare combination
+  of <strong>low-latency reads, large data capacity, and operational scalability</strong> that no
+  single-tier solution achieves.
+</p>
+
+<p>
+  The key architectural insight is that ranking workloads have two properties Aerospike is
+  purpose-built for: <strong>high fan-out batch reads</strong> (hundreds of document lookups per
+  query) and <strong>large long-tail datasets</strong> (billions of documents, multi-TB feature
+  space) that cannot be economically held in DRAM.
+</p>
+
+<div class="callout">
+  <strong>Adopt Aerospike for your online feature store when:</strong>
+  <ul style="margin-top:8px;">
+    <li>Your feature dataset exceeds 100GB and is growing</li>
+    <li>You rank &gt; 100 candidates per query with per-document feature lookups</li>
+    <li>You run both streaming and batch feature ingestion pipelines</li>
+    <li>You operate across multiple geographic regions</li>
+    <li>p99 feature read latency must stay under 10ms</li>
+  </ul>
+</div>
+
+<div class="info-box">
+  <strong>Stick with Redis when:</strong>
+  <ul style="margin-top:8px;">
+    <li>Dataset fits in DRAM with room to spare</li>
+    <li>You need Redis-native data structures (sorted sets, pub/sub)</li>
+    <li>Absolute minimum single-key latency (&lt; 0.5ms p99) is required</li>
+    <li>Team investment in Redis operations is already high</li>
+  </ul>
+</div>
+
+<p>
+  The migration from Redis Cluster to Aerospike in our ranking stack reduced infrastructure cost
+  by <strong>83%</strong>, improved batch read p99 by <strong>43%</strong>, and eliminated the
+  operational burden of manual Redis resharding as our feature corpus grows.
+</p>
+
+<hr/>
+
+<footer>
+  Search Platform &mdash; Principal Engineering &nbsp;|&nbsp;
+  Internal Technical White Paper &nbsp;|&nbsp;
+  Not for external distribution &nbsp;|&nbsp;
+  May 2026
+</footer>
+
+</body>
+</html>
