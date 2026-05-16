@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
+    "build": "node scripts/build-feed.js && vite build",
+    "preview": "vite preview",
+    "feed": "node scripts/build-feed.js"
   },
   "dependencies": {
     "marked": "^18.0.3",
