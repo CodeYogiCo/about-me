@@ -4,6 +4,7 @@ tag: search
 title: "Measuring retrieval quality: NDCG, MRR, and friends"
 read: 9 min
 deck: "A working guide to the metrics that actually drive ranking decisions — with two small calculators you can play with."
+hidden: true
 ---
 
 You can't improve a ranker if you can't measure it. That sounds obvious, but most teams I've worked with measure the wrong thing or measure the right thing badly, and then wonder why their offline experiments don't predict online behavior.
