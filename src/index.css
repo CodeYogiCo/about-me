@@ -13,7 +13,7 @@
   --mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, Menlo, monospace;
   --fs-body: 15.5px;
   --lh-body: 1.65;
-  --col: 720px;
+  --col: 880px;
   --gut: 28px;
   --section-gap: 56px;
 }
@@ -173,7 +173,7 @@ a:hover {
 
 .about p {
   margin: 0 0 14px;
-  max-width: 68ch;
+  max-width: 80ch;
   color: var(--ink);
 }
 .about p.muted { color: var(--ink-soft); }
@@ -248,15 +248,15 @@ a:hover {
   font-weight: 500;
   letter-spacing: -0.01em;
   margin: 0 0 10px;
-  max-width: 28ch;
+  max-width: 32ch;
 }
 .post-deck {
   font-size: 14px;
   color: var(--ink-soft);
-  max-width: 56ch;
+  max-width: 64ch;
   margin: 0 0 40px;
 }
-.post-body { font-size: 14px; line-height: 1.72; max-width: 64ch; }
+.post-body { font-size: 14px; line-height: 1.72; max-width: 76ch; }
 .post-body p { margin: 0 0 18px; }
 .post-body h2 {
   font-size: 13px;
