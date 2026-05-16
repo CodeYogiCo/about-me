@@ -374,6 +374,13 @@ a:hover {
 .widget-grid-pr {
   grid-template-columns: 60px 1fr 28px;
 }
+.widget-grid-kv {
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+}
+.widget-select.inline {
+  width: auto;
+  display: inline-block;
+}
 
 .widget-row-input {
   margin-bottom: 12px;
