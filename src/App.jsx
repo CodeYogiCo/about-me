@@ -131,6 +131,10 @@ function About() {
         <dd>
           <a href={`mailto:${profile.email}`}>{profile.email}</a>
         </dd>
+        <dt>subscribe</dt>
+        <dd>
+          <a href="/feed.xml">rss</a> · or point your reader at this site
+        </dd>
       </dl>
     </section>
   )
