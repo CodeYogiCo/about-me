@@ -96,11 +96,11 @@ That property is the opening for the optimization.
 
 ## the KV cache
 
-Here's the thing nobody tells you up front: **the model doesn't remember anything between words.** When it generates the next word, it doesn't pick up where it left off — it rebuilds the library from scratch.
+Here's the thing nobody tells you up front: **the model doesn't remember anything between words.** When it generates the next word, it doesn't pick up where it left off — it starts the whole sentence over from the beginning.
 
-Every single word the model generates means re-shelving every existing book and re-generating every book's catalog entry. Just to add *one* new word at the end.
+Every single word the model generates means going through every existing book again and re-generating every book's catalog entry. Just to add *one* new word at the end.
 
-It's like a library that, every time a new book arrives, throws out the entire catalog and re-catalogs every book from scratch — including all 1,000 books that have been on the shelf for years.
+Imagine, every time a new book arrives at the shelf, throwing out the entire catalog and re-cataloging every existing book from scratch — including all 1,000 books that have been on the shelf for years.
 
 Why does it work this way? Because each prediction is a self-contained calculation: *"given the sentence so far, what comes next?"* The "given the sentence so far" part is rebuilt every time. The model has no built-in memory between predictions.
 
