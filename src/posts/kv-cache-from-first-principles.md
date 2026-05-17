@@ -70,17 +70,44 @@ Attention is permutation-invariant by default — it doesn't care about token or
 
 Attention is the operation that lets each token "look at" every other token in the sequence and pull in information from them. It's the only place in a transformer where tokens talk to each other; everything else is per-token. And it's the place where the KV cache lives.
 
-### Q, K, V
+### the classroom
 
-For each token, the model produces three vectors from its embedding via three learned linear projections:
+The cleanest way to picture this is a classroom. Each token in a sentence is a student sitting in a row.
 
-- **Query (Q)** — what am I looking for?
-- **Key (K)** — what do I have to offer?
-- **Value (V)** — if you matched on me, here's what I'll give you.
+```
+the   cat   sat   on   the   mat
+```
 
-If your hidden dimension is 768, the projections are three 768×768 weight matrices: `W_q`, `W_k`, `W_v`.
+The principal claps: *"each of you, figure out what you mean in this exact sentence."*
 
-### the operation
+Student "sat" can't do that alone — by itself it could mean a hundred things. It needs to look at the other students and pull in context. So does every other student.
+
+To do this, every student walks in carrying **three index cards**:
+
+- **Q card** — the question this student is asking. *"Who's doing me? Where's it happening?"*
+- **K card** — the label this student advertises to others. *"I'm a subject! I'm a verb! I'm a determiner!"*
+- **V card** — the actual info this student shares if matched. *"Animal, four legs, mammal, often a pet…"*
+
+The dance, in lock-step across the whole row:
+
+1. Hold up your **Q card** — "here's what I'm asking."
+2. Look at every other student's **K card**.
+3. Score how well each K matches your Q (high = relevant, low = irrelevant).
+4. Pull in each student's **V card** content, weighted by the scores from step 3.
+
+For "sat" specifically:
+
+- "cat"'s K says *"subject!"* → high match → "sat" pulls in lots of "cat"'s V
+- "on"'s K says *"position word!"* → high match → pulls in lots of "on"'s V
+- "the"'s K says *"just a determiner"* → low match → pulls in almost nothing
+
+After the dance, "sat" no longer means just "the verb sat" — it carries a blended infusion of context. Every other student does the exact same dance at the exact same time. **Q asks. K announces. V delivers.**
+
+### Q, K, V are vectors, not cards
+
+The "cards" the model actually uses aren't text — they're short lists of numbers (vectors). For each token, the model produces three vectors via three learned linear projections. If your hidden dimension is 768, those projections are 768×768 weight matrices: `W_q`, `W_k`, `W_v`. Same token in → three different vectors out.
+
+### the operation in matrix form
 
 Stack all the Qs, Ks, Vs into matrices. Then:
 
@@ -88,28 +115,24 @@ Stack all the Qs, Ks, Vs into matrices. Then:
 Attention(Q, K, V) = softmax( Q · K^T / √d_k ) · V
 ```
 
-In four steps:
+Mapped back to the classroom:
 
-1. **`Q · K^T`** — every token's query dot-products with every token's key. Result: an N×N matrix of relevance scores.
-2. **`/ √d_k`** — divide by the square root of the key dimension. Scaling fix for gradient stability.
-3. **softmax** across each row — turns the scores into a probability distribution that sums to 1.
-4. **`· V`** — multiply by the value matrix. For each token, this gives a weighted sum of all value vectors, weighted by the attention probabilities.
+1. **`Q · K^T`** — every Q dot-products with every K. Result: an N×N grid of "how well does this Q match that K?" scores. *This is step 3 of the dance, vectorized.*
+2. **`/ √d_k`** — scale by the square root of the key dimension. Keeps gradients stable. Bookkeeping.
+3. **softmax** across each row — turns raw scores into probability weights that sum to 1. Bookkeeping.
+4. **`· V`** — weighted sum of V vectors using those weights. *This is step 4 of the dance.*
 
-The way I find this easiest to hold in my head: attention is a **differentiable, fuzzy database lookup**. Q is your query, K is the index, V is the row data. Instead of returning a single matching row, you return a weighted blend of every row, where the weights come from how well each row's K matched your Q. The projections (`W_q`, `W_k`, `W_v`) get tuned by training to make the lookups useful.
+The formula runs the entire classroom in matrix form, in one shot — every student asking, every student answering. The 2017 paper that introduced this is [Attention Is All You Need](https://arxiv.org/abs/1706.03762) — eight authors, eleven pages, the foundation of every modern model.
 
-### multi-head
+### multi-head — many classrooms in parallel
 
-One set of (W_q, W_k, W_v) gives one "view" of how tokens relate. Doing attention multiple times in parallel with independent projections gives multiple views. Each "head" learns to attend to something different — one might learn syntactic agreement, another might track entities, another long-range references.
+One run of attention is one classroom focusing on one type of relationship (maybe grammar, maybe topic, maybe long-range reference). Models run many classrooms in parallel — Llama 3 8B has 32 of them per layer. Each "head" learns to attend to a different pattern. The outputs concatenate and combine before going to the next layer.
 
-Mechanically: split the hidden dimension into h chunks (e.g. 12 heads × 64 dims = 768), run attention on each chunk in parallel, concatenate the outputs, project back through one more linear layer.
-
-The number that matters for KV cache is the number of **K and V heads**. In the original transformer, that equals the number of Q heads. In modern architectures with Grouped-Query Attention (GQA) — Llama 2 70B, Llama 3, Mistral — there are fewer K/V heads than Q heads, shared across groups. We'll come back to this.
+The number that matters for the KV cache is the number of **K and V heads**. In the original transformer that equals the number of Q heads. In modern Grouped-Query Attention (GQA) models — Llama 2 70B, Llama 3, Mistral — there are fewer K/V heads than Q heads, shared across groups. We'll come back to this.
 
 ### causal masking
 
-When generating, the token at position *t* must not be allowed to attend to positions *t+1, t+2*, … — they don't exist yet, and during training we'd be cheating if we let it peek.
-
-Implementation: before the softmax, set the upper triangle of the Q·K^T matrix to `-∞`. After softmax those positions get probability zero. The math is otherwise unchanged.
+When generating, the student at position *t* isn't allowed to look at students at positions *t+1, t+2*, … — they haven't been written yet. We set their relevance scores to `-∞` before softmax, which makes their weights zero. The math is otherwise unchanged.
 
 ```
                 k1     k2     k3     k4
@@ -119,7 +142,7 @@ Implementation: before the softmax, set the upper triangle of the Q·K^T matrix 
          q4 [   ✓      ✓      ✓      ✓  ]
 ```
 
-This is the property that makes the KV cache possible. We'll see it in a moment.
+This is the property that makes the KV cache possible. Each student's K and V depend only on students to their left — never on anything to their right. Once a student walks in and sets up their K and V cards, those cards never change.
 
 ## the transformer block, briefly
 
@@ -170,6 +193,65 @@ At each generation step:
 Per-step projection work drops from O(N) to O(1). Attention drops from O(N²) recomputation to O(N) per step. Generating a sequence of length L drops from O(L³) work to O(L²) — and the L² is now a single attention pass per step, not a full re-run.
 
 This is the same intuition as caching expensive query results in a database. The cache is **trivially correct** because the cached values are immutable — no invalidation logic, no consistency dance, no eventual-consistency surprises. The only question is memory.
+
+<svg viewBox="0 0 720 380" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="KV cache growth across three generation steps" style="display: block; width: 100%; max-width: 720px; height: auto; margin: 28px auto;">
+  <style>
+    .step-title { fill: var(--ink); font-family: var(--mono); font-size: 12px; text-anchor: middle; font-weight: 500; }
+    .step-sub { fill: var(--ink-faint); font-family: var(--mono); font-size: 10px; text-anchor: middle; }
+    .row-label { fill: var(--ink-soft); font-family: var(--mono); font-size: 11px; }
+    .slot-text { fill: var(--ink); font-family: var(--mono); font-size: 10px; text-anchor: middle; }
+    .slot-text-new { fill: white; font-family: var(--mono); font-size: 10px; text-anchor: middle; font-weight: 600; }
+    .cached { fill: var(--bg-alt); stroke: var(--rule); stroke-width: 1; }
+    .new-slot { fill: var(--accent); stroke: var(--accent); stroke-width: 1; }
+    .legend-text { fill: var(--ink-soft); font-family: var(--mono); font-size: 10.5px; }
+    .caption { fill: var(--ink-faint); font-family: var(--mono); font-size: 10px; text-anchor: middle; }
+    .col-divider { stroke: var(--rule); stroke-width: 1; stroke-dasharray: 2 4; }
+  </style>
+  <line class="col-divider" x1="230" y1="20" x2="230" y2="190"/>
+  <line class="col-divider" x1="450" y1="20" x2="450" y2="190"/>
+  <text class="step-title" x="100" y="30">step 1</text>
+  <text class="step-sub" x="100" y="46">generated: "The"</text>
+  <text class="row-label" x="20" y="100">K</text>
+  <rect class="new-slot" x="50" y="80" width="60" height="34" rx="4"/>
+  <text class="slot-text-new" x="80" y="101">k_the</text>
+  <text class="row-label" x="20" y="150">V</text>
+  <rect class="new-slot" x="50" y="130" width="60" height="34" rx="4"/>
+  <text class="slot-text-new" x="80" y="151">v_the</text>
+  <text class="step-title" x="335" y="30">step 2</text>
+  <text class="step-sub" x="335" y="46">generated: "The cat"</text>
+  <text class="row-label" x="240" y="100">K</text>
+  <rect class="cached" x="270" y="80" width="60" height="34" rx="4"/>
+  <text class="slot-text" x="300" y="101">k_the</text>
+  <rect class="new-slot" x="334" y="80" width="60" height="34" rx="4"/>
+  <text class="slot-text-new" x="364" y="101">k_cat</text>
+  <text class="row-label" x="240" y="150">V</text>
+  <rect class="cached" x="270" y="130" width="60" height="34" rx="4"/>
+  <text class="slot-text" x="300" y="151">v_the</text>
+  <rect class="new-slot" x="334" y="130" width="60" height="34" rx="4"/>
+  <text class="slot-text-new" x="364" y="151">v_cat</text>
+  <text class="step-title" x="585" y="30">step 3</text>
+  <text class="step-sub" x="585" y="46">generated: "The cat sat"</text>
+  <text class="row-label" x="460" y="100">K</text>
+  <rect class="cached" x="490" y="80" width="60" height="34" rx="4"/>
+  <text class="slot-text" x="520" y="101">k_the</text>
+  <rect class="cached" x="554" y="80" width="60" height="34" rx="4"/>
+  <text class="slot-text" x="584" y="101">k_cat</text>
+  <rect class="new-slot" x="618" y="80" width="60" height="34" rx="4"/>
+  <text class="slot-text-new" x="648" y="101">k_sat</text>
+  <text class="row-label" x="460" y="150">V</text>
+  <rect class="cached" x="490" y="130" width="60" height="34" rx="4"/>
+  <text class="slot-text" x="520" y="151">v_the</text>
+  <rect class="cached" x="554" y="130" width="60" height="34" rx="4"/>
+  <text class="slot-text" x="584" y="151">v_cat</text>
+  <rect class="new-slot" x="618" y="130" width="60" height="34" rx="4"/>
+  <text class="slot-text-new" x="648" y="151">v_sat</text>
+  <rect class="cached" x="160" y="240" width="24" height="18" rx="3"/>
+  <text class="legend-text" x="195" y="253">cached from a previous step — no recomputation</text>
+  <rect class="new-slot" x="160" y="270" width="24" height="18" rx="3"/>
+  <text class="legend-text" x="195" y="283">computed this step — the new token's K and V</text>
+  <text class="caption" x="360" y="335">one layer of the KV cache, growing by one column per generated token.</text>
+  <text class="caption" x="360" y="352">past entries never change — that's why caching them is trivially correct.</text>
+</svg>
 
 ### the memory math
 
