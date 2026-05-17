@@ -3,14 +3,14 @@ date: 2026-05-16
 tag: systems
 title: "The KV cache, from first principles"
 read: 8 min
-deck: "How attention and the KV cache actually work — explained with a classroom of students."
+deck: "How attention and the KV cache actually work — explained with a small library."
 ---
 
 The number that decides how much your LLM inference bill is doesn't appear on the model card. It isn't the parameter count. It isn't the context length. It's the **KV cache** — a per-request scratchpad in GPU memory that grows with every word the model generates.
 
 If you serve models, this is the dominant resource you're managing. Every recent inference trick exists to shrink it.
 
-This post explains what the KV cache is from scratch, with a classroom of students.
+This post explains what the KV cache is from scratch, with a small library.
 
 ## what an LLM does, in one line
 
@@ -33,87 +33,84 @@ You can watch this happen live at [tiktokenizer.vercel.app](https://tiktokenizer
 
 That's all you need to know about tokenization. The interesting part starts now.
 
-## the classroom
+## the library
 
-Imagine each word in your sentence is a student, sitting in a row.
+Imagine your sentence is a small library, with one book per word on the shelf.
 
 ```
-the   cat   sat   on   the   mat
+[the] [cat] [sat] [on] [the] [mat]
 ```
 
-The principal claps and says: *"each of you, figure out what you mean in this exact sentence."*
+When you want to understand any single book — say, "sat" — you can't just look at it in isolation. The word "sat" could mean a hundred things (sat for an exam, sat in a chair, …). You need to understand it in the context of the other books on the shelf.
 
-Student "sat" can't do that alone — by itself it could mean a hundred things (sat for an exam, sat in a chair, …). It needs to look at the other students and pull in context. So does every other student.
+The library has a **catalog**. Every book has an entry in the catalog with two cards:
 
-To do that, every student walks in carrying **three index cards**:
+- A **title card (K)** — what the book advertises itself as. *"I'm an action verb. I'm about sitting."*
+- A **contents card (V)** — what the book actually delivers if matched. *"Action of sitting, past tense, requires a subject and a location."*
 
-- **Q card** — the question this student is asking. *"Who's doing me? Where's it happening?"*
-- **K card** — the label this student advertises to others. *"I'm a subject! I'm a verb!"*
-- **V card** — the actual info this student shares if matched. *"Animal, four legs, mammal, often a pet…"*
+And every book also has its own **question (Q)** — what it needs to know to understand its place in this library:
 
-The dance, all students at once:
+- "sat" asks: *"What's the subject doing me? Where's it happening?"*
+- "cat" asks: *"What action am I taking? Where am I?"*
+- "the" asks (a small question): *"Which noun am I attached to?"*
 
-1. Hold up your **Q card** — *"here's what I'm asking."*
-2. Look at every other student's **K card**.
-3. Score how well each K matches your Q (high = relevant, low = not).
-4. Pull in each student's **V card** content, weighted by those scores.
+To answer each book's question, the model browses the catalog:
 
-For "sat":
+For "sat" specifically:
 
-- "cat" advertises *"subject!"* → high match → "sat" pulls in lots of "cat" info
-- "on" advertises *"position word!"* → high match → pulls in lots of "on" info
-- "the" advertises *"just a determiner"* → low match → pulls in almost nothing
+- "cat"'s title card says *"subject, noun, animal"* → **high match** → pull in lots of "cat"'s contents card
+- "on"'s title card says *"position word"* → **high match** → pull in lots of "on"'s contents
+- "the"'s title card says *"just a determiner"* → **low match** → pull in almost nothing
+- "mat"'s title card says *"noun being acted on"* → **medium match** → pull in some of "mat"'s contents
 
-After the dance, "sat" understands itself in context — *a sitting action done by a cat onto a mat*. Every other student does the exact same dance at the exact same time.
+The combined result — a blend of contents weighted by how well each title matched — is the new "sat". It's no longer the abstract verb "sat", it carries context: *a sitting action done by a cat onto a mat*. Every other book on the shelf gets the same treatment in parallel, each using its own question against everyone else's title cards.
 
 **Q asks. K announces. V delivers.**
 
 That's attention — the engine of every modern language model. The 2017 paper that introduced it is [Attention Is All You Need](https://arxiv.org/abs/1706.03762) — eight authors, eleven pages.
 
-(The "cards" aren't really paper — they're short lists of numbers. But the role each plays is exactly what the analogy says.)
+(In the actual model, the cards aren't paper — they're short lists of numbers. But the role each plays is exactly what the analogy says.)
 
 ## doing it many times, in parallel
 
-One classroom focuses on one type of relationship (maybe grammar — who's the subject of what verb). To capture different kinds — meaning, position, long-range references — the model runs **many parallel classrooms at once**. Llama 3 8B has 32 of them.
+One catalog focuses on one type of relationship between books (maybe grammar — who's the subject of what verb). To capture different kinds of relationships — meaning, position, long-range references — the model maintains **many parallel catalogs at once**. Llama 3 8B has 32 of them.
 
-Then it runs another set of 32 parallel classrooms. And another. **Stacked 32 layers deep.** Each layer's dance happens on the *output* of the previous one, so context compounds.
+Then it does the whole browsing-and-combining process again, this time using the previous round's enriched results. And again. **Stacked 32 layers deep.** Each layer refines the previous layer's understanding.
 
-In layer 1, "sat" picks up basic context. By layer 32, every student has a deeply layered understanding of its role in the sentence.
+By layer 32, every book has a deeply layered understanding of its place in the library.
 
 ## generating one word at a time
 
 To write the next word, the model:
 
-1. Runs all 32 layers of the dance over the existing words.
-2. Looks at the last student's final understanding.
+1. Runs all 32 layers of browsing and combining over the existing books.
+2. Looks at the last book's final understanding.
 3. Turns that into a probability over every word in the vocabulary.
 4. Picks one — usually the most likely.
-5. Calls that word as the next student. They walk in and sit down.
-6. Goes back to step 1, now with one more student in the row.
+5. Adds that word's book to the end of the shelf.
+6. Goes back to step 1, now with one more book on the shelf.
 
-This is how an LLM writes a paragraph — type a sentence, generate one word, re-run all 32 layers, generate another word, and so on.
+One rule when generating: **each book can only consult catalog entries for books to its left.** It can't peek at books that haven't been placed yet — those are what's being predicted. This means every book's catalog entry depends only on books to its left, never on anything to its right. **Once a book's entry is in the catalog, it never changes.**
 
-One rule when generating: **each new student can only look at students to their left.** They can't peek at empty chairs to their right — those students haven't been called yet (that's what we're predicting). This means existing students' cards never depend on anyone who arrives later. **Once a student writes their K and V cards, those cards never change.**
-
-That property is the opening for the optimization that makes LLMs practical to serve.
+That property is the opening for the optimization.
 
 ## the KV cache
 
-Here's the thing nobody tells you up front: **the model doesn't remember anything between words.** When it generates the next word, it doesn't pick up where it left off — it starts the whole sentence over.
+Here's the thing nobody tells you up front: **the model doesn't remember anything between words.** When it generates the next word, it doesn't pick up where it left off — it rebuilds the library from scratch.
 
-Every single word the model generates means re-reading the entire sentence from the first word, running every student's dance, in every parallel classroom, in every one of the 32 layers. Just to add *one* new word at the end.
+Every single word the model generates means re-shelving every existing book and re-generating every book's catalog entry. Just to add *one* new word at the end.
 
-It's like writing a book where, to add each new sentence, you re-read the entire book from page 1.
+It's like a library that, every time a new book arrives, throws out the entire catalog and re-catalogs every book from scratch — including all 1,000 books that have been on the shelf for years.
 
-Why does it work this way? Because each prediction is a self-contained calculation: *"given the sentence so far, what comes next?"* The "given the sentence so far" part is run fresh every time. The model has no built-in memory between predictions.
+Why does it work this way? Because each prediction is a self-contained calculation: *"given the sentence so far, what comes next?"* The "given the sentence so far" part is rebuilt every time. The model has no built-in memory between predictions.
 
-For a 3-word sentence, that means re-running the whole machine over words 1, 2, 3 to get word #4. For a 1,000-word sentence, re-running over words 1 through 1,000 to get word #1,001. The cost gets brutal fast.
+For a 3-word sentence, that means re-cataloging 3 books to get word #4. For a 1,000-word sentence, re-cataloging 1,000 books to get word #1,001. The cost gets brutal fast.
 
-But notice something: **every existing student's K and V cards would come out identical every single time.** Each student's cards depend only on students to their left, and nothing to their left has changed. So re-computing them is pure wasted work.
+But notice: **every existing book's catalog entry would come out identical every single time.** Each entry depends only on books to its left, and nothing to its left has changed. So re-cataloging is pure wasted work.
 
-The fix is obvious once you see it: **give every student a folder.** The first time they write their K and V cards (in each of the 32 layers), the cards go in the folder. Next generation step, when those cards are needed again, they just hand over the folder. No re-writing.
+The fix is obvious once you see it: **keep the catalog.** After each book's title and contents cards are generated the first time, save them. Next time we add a new word, only the brand-new book needs a fresh catalog entry. All the old ones are still on file.
 
-That folder is the **KV cache**.
+That saved catalog is the **KV cache**.
 
 <svg viewBox="0 0 720 380" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="KV cache growth across three generation steps" style="display: block; width: 100%; max-width: 720px; height: auto; margin: 28px auto;">
   <style>
@@ -174,23 +171,23 @@ That folder is the **KV cache**.
   <text class="caption" x="360" y="352">past entries never change — that's why caching them is trivially correct.</text>
 </svg>
 
-Now each new generation step only requires the brand-new student to write fresh cards. Everyone else hands over their folder. The expensive "re-reading the entire book" goes away.
+Now each generation step only requires the brand-new book to write its catalog entry. The library doesn't get re-cataloged from scratch every time. Generation stays fast even as the sentence grows.
 
-It's safe to cache because the cards are **frozen once written**. A student's K and V depend only on students sitting to their left. Nothing to their right — which is what's being added — can ever change them. So a cached folder can never go stale.
+It's safe to cache because each catalog entry is **frozen once written**. A book's K and V depend only on books to its left. Nothing to its right (which is what's being added) can ever change them. So a cached entry can never go stale.
 
-The only question is: how much memory do all these folders take?
+The only question is: how much memory does the catalog take?
 
 ## the memory cost
 
 This is where the inference bill lives.
 
-There's a folder per student, per layer, per parallel classroom. For a typical 7B model:
+There's a catalog entry per book, per layer, per parallel catalog. For a typical 7B model:
 
 - ~32 layers
-- ~32 parallel classrooms per layer
+- ~32 parallel catalogs per layer
 - ~128 numbers per card
 
-That works out to about **0.5 MB per student**, per conversation. A 4,000-word conversation: **~2 GB of GPU memory per concurrent user**, just for the folders.
+That works out to about **0.5 MB per book**, per conversation. A 4,000-word conversation: **~2 GB of GPU memory per concurrent user**, just for the catalog.
 
 Try the numbers yourself:
 
@@ -198,31 +195,31 @@ Try the numbers yourself:
 
 A few things worth playing with:
 
-- Switch from **Llama 2 7B** to **Llama 3 8B**. Total memory drops 4× — Llama 3 uses a folder-shrinking trick (read on).
-- Bump **seq length** from 4k to 32k. Folders grow linearly with the row length. This is why long-context models are expensive even when the model itself hasn't changed.
-- Bump **batch** to 32 (serving 32 conversations at once). You pay 32× the memory. This is when folders start to dominate GPU memory — not the model weights.
-- Switch **dtype** to int8. Folder size halves. Tiny accuracy hit, big memory win.
+- Switch from **Llama 2 7B** to **Llama 3 8B**. Total memory drops 4× — Llama 3 uses a catalog-shrinking trick (read on).
+- Bump **seq length** from 4k to 32k. The catalog grows linearly with the number of books on the shelf. This is why long-context models are expensive even when the model itself is unchanged.
+- Bump **batch** to 32 (serving 32 conversations at once). You pay 32× the memory. This is when the catalog starts to dominate GPU memory — not the model weights.
+- Switch **dtype** to int8. Catalog size halves. Tiny accuracy hit, big memory win.
 
-## why everyone's optimizing the folders
+## why everyone's optimizing the catalog
 
-Every modern inference innovation is some variation on shrinking the folders:
+Every modern inference innovation is some variation on shrinking the catalog:
 
-- **GQA (Grouped-Query Attention)** — instead of every student-asker having their own dedicated K/V advertiser, *groups* of askers share one advertiser. Fewer folders. Used by Llama 2 70B, Llama 3, Mistral.
-- **Sliding-window attention** — only keep the last *w* students' folders. Older students "leave the room." Bounded memory, less long-range memory.
-- **Quantized KV cache** — write the cards in shorthand (int8 or int4 instead of fp16). Half or quarter the memory at modest quality cost.
-- **Prefix caching** — if many conversations start with the same intro ("You are a helpful assistant…"), share those folders across conversations.
+- **GQA (Grouped-Query Attention)** — instead of every question-asker having its own dedicated title and contents cards, *groups* of questions share one set of cards. Fewer entries to store. Used by Llama 2 70B, Llama 3, Mistral.
+- **Sliding-window attention** — only keep catalog entries for the last *w* books. Older books "leave the library." Bounded memory, less long-range memory.
+- **Quantized KV cache** — write the catalog entries in shorthand (int8 or int4 instead of fp16). Half or quarter the memory at modest quality cost.
+- **Prefix caching** — if many conversations start with the same intro ("You are a helpful assistant…"), share those catalog entries across conversations.
 
-If you're running an inference service, the KV cache **is** your dominant resource. Every serving framework you've heard of — vLLM, TGI, TensorRT-LLM — is mostly a story about managing these folders well.
+If you're running an inference service, the KV cache **is** your dominant resource. Every serving framework you've heard of — vLLM, TGI, TensorRT-LLM — is mostly a story about managing the catalog well.
 
 ## one breath
 
-- Words become **students** in a row.
-- Each student plays three roles via three cards: **Q** (their question), **K** (their label), **V** (their info).
-- **Attention** = every student asks every other "how much do you help clarify me?", scored by Q-vs-K matches, blending in everyone's V cards.
-- Many parallel classrooms (heads), repeated many layers — Llama 3 8B = 32 × 32.
-- When generating, new students walk in one at a time; each only looks at students already seated to their left.
-- Past students' K and V cards never change — so we put them in **folders** and reuse them. **That's the KV cache.**
-- Folders dominate inference memory. Shrinking them is most of what serving frameworks do.
+- Your sentence is a **library**, one **book** per word.
+- Every book has three things: a **question (Q)**, a **title card (K)**, and a **contents card (V)**.
+- **Attention** = for every book, match its question against every other book's title card, pull in their contents weighted by how well the titles matched.
+- Many parallel catalogs (heads), repeated many layers — Llama 3 8B = 32 × 32.
+- When generating, new books get added to the shelf one at a time; each can only consult books already on the shelf to its left.
+- Existing books' catalog entries never change — so we save them in **the catalog** and reuse them across generation steps. **That's the KV cache.**
+- The catalog dominates inference memory. Shrinking it is most of what serving frameworks do.
 
 If you want to go deeper later: Karpathy's [Let's build GPT](https://www.youtube.com/watch?v=kCc8FmEb1nY) is a 2-hour notebook walkthrough that builds a transformer from scratch. Best next step.
 
