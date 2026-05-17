@@ -2,204 +2,108 @@
 date: 2026-05-16
 tag: systems
 title: "The KV cache, from first principles"
-read: 14 min
-deck: "Start with tokenization, walk through attention, end at the number that decides how much LLM inference actually costs. With a small calculator."
+read: 8 min
+deck: "How attention and the KV cache actually work — explained with a classroom of students. No math required."
 ---
 
-The number that decides how much your LLM inference bill is doesn't appear on the model card. It isn't the parameter count. It isn't the context length you advertise. It's the **KV cache** — a per-request scratchpad that sits in GPU memory and grows with every token the model generates.
+The number that decides how much your LLM inference bill is doesn't appear on the model card. It isn't the parameter count. It isn't the context length. It's the **KV cache** — a per-request scratchpad in GPU memory that grows with every word the model generates.
 
-If you serve models, the KV cache is the dominant resource you're managing, whether you know it or not. Every recent inference innovation — grouped-query attention, paged attention, prefix caching, quantized cache — exists to make this one number smaller.
+If you serve models, this is the dominant resource you're managing. Every recent inference trick exists to shrink it.
 
-This post walks from tokenization to attention to the cache, in that order. By the end you'll understand why it exists, what determines its size, and why two 7B-parameter models can have wildly different serving economics depending on how their attention is shaped.
+This post explains what the KV cache is from scratch, with a classroom of students. No math. No prior ML knowledge needed.
 
-## what an LLM actually does
+## what an LLM does, in one line
 
-A language model does exactly one thing: **given a sequence of tokens, predict the probability distribution over the next token.** That's the entire primitive. Chat, code generation, agentic tool use — all of it is this loop, called repeatedly.
-
-```
-input:  ["The", " quick", " brown"]
-output: { " fox": 0.62, " dog": 0.11, " cat": 0.04, ... }   // over a ~50k vocabulary
-sample one token, append, repeat.
-```
-
-To generate `" fox"`, the model has to take three tokens and produce a calibrated distribution over fifty thousand. The thing that does that is the transformer — a stack of attention layers. To understand the KV cache, we need to understand attention. To understand attention, we need to know what a "token" even is.
-
-## tokenization
-
-Models don't process text. They process **integer IDs**. Tokenization is the deterministic mapping from a UTF-8 string to a list of integers.
-
-Why not characters or words?
-
-- **Characters** give you a tiny vocabulary (~256 bytes) but enormous sequences. The model has to relearn "cat" relates to "kitten" from scratch.
-- **Words** give you semantic units but a vocabulary in the millions, and you can't handle any word the model didn't see in training. "OOV" — out of vocabulary — becomes a permanent problem.
-- **Subwords** (the standard) split the difference. A fixed vocabulary of ~30k–100k pieces, where common words are one token and rare words split into pieces.
-
-Subword tokenization typically uses Byte-Pair Encoding (BPE). The training process:
-
-1. Start with all single bytes as the vocabulary.
-2. Count adjacent pairs in the corpus. Most frequent pair wins.
-3. Merge that pair into a new token. Add to vocabulary.
-4. Repeat until the vocab reaches the target size.
-
-At inference time, you greedily apply the learned merges. Same input always produces the same tokens.
+A language model takes the words you've written so far and predicts the next word. That's it. Chat, code generation, agents — everything is this one trick called in a loop.
 
 ```
-"tokenization is wild"
-  →  ["token", "ization", " is", " wild"]
-  →  [9712, 2065, 318, 4295]
+input:  "The quick brown ___"
+output: "fox" (95% likely)
+        "dog" (3%)
+        …
 ```
 
-Notice the leading space on `" is"` — most modern tokenizers fold whitespace into the following token so detokenization is a trivial concatenation.
+Pick one, append it, repeat. That's how an LLM writes a paragraph — one word at a time, each one a guess at what comes next.
 
-This matters for serving: **the units that matter operationally are tokens, not characters.** Pricing, context windows, KV cache size — all in token units. Rough English heuristic: 1 token ≈ 4 characters ≈ 0.75 words. Code, JSON, and non-English text spend more tokens per character.
+## words become numbers from a fixed list
 
-## embeddings: from IDs to vectors
+Models don't see text — they see numbers. Before anything else, the model breaks your sentence into chunks from a fixed list of about 50,000 known chunks (called **tokens**). Common words like "the" are one chunk. Rare words like "tokenization" get split into a few chunks ("token" + "ization") because the model has those but not the whole word.
 
-Integer IDs are useless on their own — token #5712 isn't five times bigger than token #1142. So each ID is converted into a dense vector through a learned lookup table.
+You can watch this happen live at [tiktokenizer.vercel.app](https://tiktokenizer.vercel.app/?model=cl100k_base) — paste anything.
 
-```
-token_id    →    embedding vector
-   5712     →    [0.12, -0.84, 0.31, ...]   // typically 768 to 8192 floats
-```
+That's all you need to know about tokenization. The interesting part starts now.
 
-The embedding table is a matrix of shape `[vocab_size, hidden_dim]`. Looking up a token is just a row read. These vectors encode "what the model knows" about each token in a compressed form, learned during training.
+## the classroom
 
-Attention is permutation-invariant by default — it doesn't care about token order — so position information is injected either by adding learned position vectors, or via rotational schemes like RoPE that bake position into the attention math. The detail doesn't matter for our purposes. Just know: the model has a way to tell that token #3 came before token #4.
-
-## attention: the one operation that matters here
-
-Attention is the operation that lets each token "look at" every other token in the sequence and pull in information from them. It's the only place in a transformer where tokens talk to each other; everything else is per-token. And it's the place where the KV cache lives.
-
-### the classroom
-
-The cleanest way to picture this is a classroom. Each token in a sentence is a student sitting in a row.
+Imagine each word in your sentence is a student, sitting in a row.
 
 ```
 the   cat   sat   on   the   mat
 ```
 
-The principal claps: *"each of you, figure out what you mean in this exact sentence."*
+The principal claps and says: *"each of you, figure out what you mean in this exact sentence."*
 
-Student "sat" can't do that alone — by itself it could mean a hundred things. It needs to look at the other students and pull in context. So does every other student.
+Student "sat" can't do that alone — by itself it could mean a hundred things (sat for an exam, sat in a chair, …). It needs to look at the other students and pull in context. So does every other student.
 
-To do this, every student walks in carrying **three index cards**:
+To do that, every student walks in carrying **three index cards**:
 
 - **Q card** — the question this student is asking. *"Who's doing me? Where's it happening?"*
-- **K card** — the label this student advertises to others. *"I'm a subject! I'm a verb! I'm a determiner!"*
+- **K card** — the label this student advertises to others. *"I'm a subject! I'm a verb!"*
 - **V card** — the actual info this student shares if matched. *"Animal, four legs, mammal, often a pet…"*
 
-The dance, in lock-step across the whole row:
+The dance, all students at once:
 
-1. Hold up your **Q card** — "here's what I'm asking."
+1. Hold up your **Q card** — *"here's what I'm asking."*
 2. Look at every other student's **K card**.
-3. Score how well each K matches your Q (high = relevant, low = irrelevant).
-4. Pull in each student's **V card** content, weighted by the scores from step 3.
+3. Score how well each K matches your Q (high = relevant, low = not).
+4. Pull in each student's **V card** content, weighted by those scores.
 
-For "sat" specifically:
+For "sat":
 
-- "cat"'s K says *"subject!"* → high match → "sat" pulls in lots of "cat"'s V
-- "on"'s K says *"position word!"* → high match → pulls in lots of "on"'s V
-- "the"'s K says *"just a determiner"* → low match → pulls in almost nothing
+- "cat" advertises *"subject!"* → high match → "sat" pulls in lots of "cat" info
+- "on" advertises *"position word!"* → high match → pulls in lots of "on" info
+- "the" advertises *"just a determiner"* → low match → pulls in almost nothing
 
-After the dance, "sat" no longer means just "the verb sat" — it carries a blended infusion of context. Every other student does the exact same dance at the exact same time. **Q asks. K announces. V delivers.**
+After the dance, "sat" understands itself in context — *a sitting action done by a cat onto a mat*. Every other student does the exact same dance at the exact same time.
 
-### Q, K, V are vectors, not cards
+**Q asks. K announces. V delivers.**
 
-The "cards" the model actually uses aren't text — they're short lists of numbers (vectors). For each token, the model produces three vectors via three learned linear projections. If your hidden dimension is 768, those projections are 768×768 weight matrices: `W_q`, `W_k`, `W_v`. Same token in → three different vectors out.
+That's attention — the engine of every modern language model. The 2017 paper that introduced it is [Attention Is All You Need](https://arxiv.org/abs/1706.03762) — eight authors, eleven pages.
 
-### the operation in matrix form
+(The "cards" aren't really paper — they're short lists of numbers. But the role each plays is exactly what the analogy says.)
 
-Stack all the Qs, Ks, Vs into matrices. Then:
+## doing it many times, in parallel
 
-```
-Attention(Q, K, V) = softmax( Q · K^T / √d_k ) · V
-```
+One classroom focuses on one type of relationship (maybe grammar — who's the subject of what verb). To capture different kinds — meaning, position, long-range references — the model runs **many parallel classrooms at once**. Llama 3 8B has 32 of them.
 
-Mapped back to the classroom:
+Then it runs another set of 32 parallel classrooms. And another. **Stacked 32 layers deep.** Each layer's dance happens on the *output* of the previous one, so context compounds.
 
-1. **`Q · K^T`** — every Q dot-products with every K. Result: an N×N grid of "how well does this Q match that K?" scores. *This is step 3 of the dance, vectorized.*
-2. **`/ √d_k`** — scale by the square root of the key dimension. Keeps gradients stable. Bookkeeping.
-3. **softmax** across each row — turns raw scores into probability weights that sum to 1. Bookkeeping.
-4. **`· V`** — weighted sum of V vectors using those weights. *This is step 4 of the dance.*
+In layer 1, "sat" picks up basic context. By layer 32, every student has a deeply layered understanding of its role in the sentence.
 
-The formula runs the entire classroom in matrix form, in one shot — every student asking, every student answering. The 2017 paper that introduced this is [Attention Is All You Need](https://arxiv.org/abs/1706.03762) — eight authors, eleven pages, the foundation of every modern model.
+## generating one word at a time
 
-### multi-head — many classrooms in parallel
+To write the next word, the model:
 
-One run of attention is one classroom focusing on one type of relationship (maybe grammar, maybe topic, maybe long-range reference). Models run many classrooms in parallel — Llama 3 8B has 32 of them per layer. Each "head" learns to attend to a different pattern. The outputs concatenate and combine before going to the next layer.
+1. Runs all 32 layers of the dance over the existing words.
+2. Looks at the last student's final understanding.
+3. Turns that into a probability over every word in the vocabulary.
+4. Picks one — usually the most likely.
+5. Calls that word as the next student. They walk in and sit down.
+6. Goes back to step 1, now with one more student in the row.
 
-The number that matters for the KV cache is the number of **K and V heads**. In the original transformer that equals the number of Q heads. In modern Grouped-Query Attention (GQA) models — Llama 2 70B, Llama 3, Mistral — there are fewer K/V heads than Q heads, shared across groups. We'll come back to this.
+This is how an LLM writes a paragraph — type a sentence, generate one word, re-run all 32 layers, generate another word, and so on.
 
-### causal masking
+One rule when generating: **each new student can only look at students to their left.** They can't peek at empty chairs to their right — those students haven't been called yet (that's what we're predicting). This means existing students' cards never depend on anyone who arrives later. **Once a student writes their K and V cards, those cards never change.**
 
-When the model is *generating* a sentence one word at a time, the row of students isn't fixed up front — it's growing. The principal calls "the", then "cat", then "sat"… one student at a time.
-
-When a brand-new student walks in, they're only allowed to look at students who've already taken their seat — the ones to their left. They can't peek at empty chairs to their right, because the students who will sit there haven't been called yet (that's literally the question the model is trying to answer: who comes next?).
-
-In matrix terms, we set the "relevance score" between a student and any not-yet-arrived neighbor to `-∞` before softmax. Those weights become zero. The dance is otherwise the same.
-
-```
-                k1     k2     k3     k4
-         q1 [   ✓     -∞     -∞     -∞  ]
-         q2 [   ✓      ✓     -∞     -∞  ]
-         q3 [   ✓      ✓      ✓     -∞  ]
-         q4 [   ✓      ✓      ✓      ✓  ]
-```
-
-This is the property that makes the KV cache possible. Each student's K and V cards depend only on students to their left — never on anyone to their right. **Once a student walks in and sets up their cards, those cards never change.**
-
-## the transformer block — one round, plus a moment alone
-
-So far we've described **one round** of the classroom dance — every student asking, every other student answering, everyone walking away with enriched context.
-
-A real transformer runs many rounds. Each "transformer block" is one round, plus a brief moment of solo digestion:
-
-1. **The dance** (attention) — students absorb context from each other.
-2. **Solo digestion** (a per-student calculation called the *feed-forward network*) — each student goes to a corner and processes what they just heard, on their own, without talking to anyone else.
-3. **Carry forward** (the *residual connection*) — they keep their original thoughts *plus* the new context. Nothing is forgotten.
-
-Then we run another round. And another. Llama 3 8B runs **32 rounds** stacked on top of each other.
-
-In round 1, "sat" picks up basic context — *cat is the subject, on is the position*. In round 2, "sat" can have a richer conversation because every other student also got enriched in round 1. By round 5, the context has compounded enough that "sat" knows it's part of a complete idea about a cat on a mat. By round 32, every student has a deeply layered understanding of their role in the sentence.
-
-The key property for the KV cache: **all cross-student conversation happens inside attention**. Solo digestion is per-student — nobody else's K or V is involved there. So when we cache K and V, we're caching exactly the cross-student state the next round needs.
-
-## how generation works
-
-To generate a new word, the model plays a guessing game with the principal.
-
-1. The current row of students sits down. Some are already in the row from earlier generations; the next chair is empty.
-2. The principal runs all 32 rounds of the dance.
-3. After the last round, each student has a deeply enriched representation. We look at the **last** student in the row — the one closest to the empty chair.
-4. That student "speaks" — really, produces a probability distribution over every word in the vocabulary: *"given this sentence so far, what word is most likely to come next?"*
-5. The principal picks a word (usually the most likely, sometimes a sampled one for variety) and calls that student to fill the empty chair.
-6. The row has grown by one. Repeat from step 1.
-
-This is the generation loop. Every iteration we add one new student and re-run all 32 rounds. And here's the thing — **most of those 32 rounds involve students who haven't changed since the last iteration.**
-
-That's the opening for the optimization.
+That property is the opening for the optimization that makes LLMs practical to serve.
 
 ## the KV cache
 
-### the naive cost — making everyone rewrite their cards every time
+Without any caching, every time a new student joins the row, every existing student has to **rewrite** their cards from scratch — even though their cards never actually change. That's pure wasted work, and it gets worse as the sentence grows.
 
-Say 100 students are already seated. We call student 101. To run round 7 of the dance, every student in the row needs their K and V cards.
+**The fix:** give every student a folder. The first time they write their K and V cards (in each of the 32 layers), the cards go in their folder. From then on, when their cards are needed, they just hand over the folder.
 
-Without caching, student 1 has to **rewrite** their cards from scratch — even though student 1's cards depend only on student 1 and haven't changed since the very first iteration. Same for students 2, 3, … all 100 of them. Each generation step wastes 100 students × 32 rounds of work re-doing what they already did.
-
-And the dance itself — every student asking every other student — gets quadratically more expensive as the row grows.
-
-Generating a long sentence under this naive approach is *cubically* expensive in sentence length. Painfully so.
-
-### the fix is trivial — give every student a folder
-
-Each student carries a folder. The first time they fill out their K and V cards (in each of the 32 rounds), the cards go in their folder. From then on, when the principal asks "K and V please" — they just hand over the folder.
-
-The folder is the **KV cache**. Each new generation step only requires the *brand-new* student to write fresh cards. Everyone else hands over what they already had.
-
-The math drops from cubic to quadratic. Generation suddenly becomes fast.
-
-This works for the same reason database query caching works — the cached values are *immutable* once written. No invalidation logic, no consistency dance. The only question is: how much space do all these folders take?
+That folder is the **KV cache**.
 
 <svg viewBox="0 0 720 380" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="KV cache growth across three generation steps" style="display: block; width: 100%; max-width: 720px; height: auto; margin: 28px auto;">
   <style>
@@ -260,63 +164,54 @@ This works for the same reason database query caching works — the cached value
   <text class="caption" x="360" y="352">past entries never change — that's why caching them is trivially correct.</text>
 </svg>
 
-### the memory math — how big are the folders?
+Each new generation step only requires the brand-new student to write fresh cards. Everyone else just hands over their folder. Generation goes from painfully slow to fast.
 
-Each student's folder per round depends on:
+It works for the same reason database query caching works: the cached values are *immutable* once written. No invalidation logic, no cache-consistency dance. The only question is: how much memory do all these folders take?
 
-- **How many parallel classrooms** (heads) the dance is split across
-- **How detailed each card is** (the head dimension — how many numbers in each Q/K/V vector)
-- **What format the numbers are stored in** (fp16 = 2 bytes each, int8 = 1 byte each, …)
+## the memory cost
 
-Multiply by:
+This is where the inference bill lives.
 
-- **How many rounds** (layers) — typically 32
-- **How many students in the row** (sequence length) — could be thousands
-- **How many simultaneous conversations** (batch size — concurrent users you're serving)
+There's a folder per student, per layer, per parallel classroom. For a typical 7B model:
 
-```
-kv_bytes = 2 × layers × seq_len × kv_heads × head_dim × bytes_per_element × batch
-            ↑
-            (K and V are two separate cards)
-```
+- ~32 layers
+- ~32 parallel classrooms per layer
+- ~128 numbers per card
 
-For a 7B-parameter model in fp16, that works out to about **0.5 MB per student, per conversation**. A conversation with 4,000 students: ~2 GB of GPU memory **per concurrent conversation**, just for the folders.
+That works out to about **0.5 MB per student**, per conversation. A 4,000-word conversation: **~2 GB of GPU memory per concurrent user**, just for the folders.
 
 Try the numbers yourself:
 
 <div data-widget="kv-cache-calc"></div>
 
-A few things worth doing in the calculator:
+A few things worth playing with:
 
-- Switch between **Llama 2 7B** (32 KV heads) and **Llama 3 8B** (8 KV heads, GQA — a "folder-shrinking" trick we'll see in a sec). Total folder size drops 4×. Same parameter count, completely different serving cost.
-- Bump **seq length** from 4k to 32k. Folders grow linearly with student count. This is why "long context" models are expensive even when the model itself is unchanged.
-- Bump **batch** to 32 (serving 32 conversations at once). Now you pay 32× the per-conversation cost. This is when folders start to dominate GPU memory, not the model weights.
-- Switch **dtype** to int8. Folder size halves. int4 quarters it. Tiny accuracy hit, big memory win.
+- Switch from **Llama 2 7B** to **Llama 3 8B**. Total memory drops 4× — Llama 3 uses a folder-shrinking trick (read on).
+- Bump **seq length** from 4k to 32k. Folders grow linearly with the row length. This is why long-context models are expensive even when the model itself hasn't changed.
+- Bump **batch** to 32 (serving 32 conversations at once). You pay 32× the memory. This is when folders start to dominate GPU memory — not the model weights.
+- Switch **dtype** to int8. Folder size halves. Tiny accuracy hit, big memory win.
 
-This is the whole reason serving frameworks exist: managing the folders well decides throughput.
+## why everyone's optimizing the folders
 
-## why this drives every modern inference innovation
+Every modern inference innovation is some variation on shrinking the folders:
 
-Once you see the formula, every recent technique becomes legible as a different way to shrink one of the multipliers:
+- **GQA (Grouped-Query Attention)** — instead of every student-asker having their own dedicated K/V advertiser, *groups* of askers share one advertiser. Fewer folders. Used by Llama 2 70B, Llama 3, Mistral.
+- **Sliding-window attention** — only keep the last *w* students' folders. Older students "leave the room." Bounded memory, less long-range memory.
+- **Quantized KV cache** — write the cards in shorthand (int8 or int4 instead of fp16). Half or quarter the memory at modest quality cost.
+- **Prefix caching** — if many conversations start with the same intro ("You are a helpful assistant…"), share those folders across conversations.
 
-- **Grouped-Query Attention (GQA)** — instead of each student-asker having their own dedicated K and V advertisers, *groups* of askers share the same K/V advertisers. Fewer folders to store. Used by Llama 2 70B, Llama 3, Mistral, most modern open models. Typically 4–8× smaller folders for negligible quality cost.
-- **Sliding-window attention** — only keep the last *w* students' folders in the cabinet. Older students "leave the room." Bounded memory, lose long-range memory.
-- **PagedAttention (vLLM)** — manage the folder cabinet like virtual memory in an operating system — fixed-size shelves filled, freed, and shared across conversations. Doesn't change the math; just packs the cabinet better.
-- **Quantized KV cache** — write the cards in shorthand. Store K and V as int8 or int4 instead of fp16. Cuts folder size by half or three-quarters at modest quality cost. Increasingly standard.
-- **Prefix caching** — if many conversations start with the same intro ("You are a helpful assistant…"), compute those folders once and share them across conversations. Trivially correct — the intro is identical every time. Big latency win.
-
-If you're running an inference service, the KV cache **is** your dominant resource. Throughput = how many concurrent folder-cabinets fit in GPU memory. Latency = how fast you can read them. Every serving framework you've heard of — vLLM, TGI, TensorRT-LLM, Triton — is largely a story about managing these folders well.
+If you're running an inference service, the KV cache **is** your dominant resource. Every serving framework you've heard of — vLLM, TGI, TensorRT-LLM — is mostly a story about managing these folders well.
 
 ## one breath
 
-- Words become **students** sitting in a row.
-- Each student plays three roles via three index cards: **Q** (their question), **K** (their label), **V** (their info).
-- The **classroom dance** (attention) is every student asking every other student "how much do you help clarify me?", scored by Q-vs-K match, with each student pulling in a weighted blend of others' V cards.
-- Many parallel classrooms (**multi-head**), repeated many rounds (**layers**). Llama 3 8B = 32 classrooms × 32 rounds.
-- When **generating**, new students walk in one at a time. Each can only look at students already seated to their left (**causal masking**).
-- Existing students' K and V cards never change once written — so we put them in a **folder per student** and reuse them across generation steps. That's the **KV cache**.
-- Cache size = `2 × layers × seq_len × kv_heads × head_dim × bytes × batch`. That's the number that decides your inference bill.
+- Words become **students** in a row.
+- Each student plays three roles via three cards: **Q** (their question), **K** (their label), **V** (their info).
+- **Attention** = every student asks every other "how much do you help clarify me?", scored by Q-vs-K matches, blending in everyone's V cards.
+- Many parallel classrooms (heads), repeated many layers — Llama 3 8B = 32 × 32.
+- When generating, new students walk in one at a time; each only looks at students already seated to their left.
+- Past students' K and V cards never change — so we put them in **folders** and reuse them. **That's the KV cache.**
+- Folders dominate inference memory. Shrinking them is most of what serving frameworks do.
 
-If you're going deeper, in this order: Karpathy's [Let's build GPT](https://www.youtube.com/watch?v=kCc8FmEb1nY) (build a transformer in 2 hours, in a notebook); then the [PagedAttention paper](https://arxiv.org/abs/2309.06180) for what production serving actually looks like; then the Llama 3 paper for a worked example of every choice in this post made by people who shipped at scale.
+If you want to go deeper later: Karpathy's [Let's build GPT](https://www.youtube.com/watch?v=kCc8FmEb1nY) is a 2-hour notebook walkthrough that builds a transformer from scratch. Best next step.
 
 — v
