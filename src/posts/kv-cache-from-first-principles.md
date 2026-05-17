@@ -99,9 +99,19 @@ That property is the opening for the optimization that makes LLMs practical to s
 
 ## the KV cache
 
-Without any caching, every time a new student joins the row, every existing student has to **rewrite** their cards from scratch — even though their cards never actually change. That's pure wasted work, and it gets worse as the sentence grows.
+Here's the thing nobody tells you up front: **the model doesn't remember anything between words.** When it generates the next word, it doesn't pick up where it left off — it starts the whole sentence over.
 
-**The fix:** give every student a folder. The first time they write their K and V cards (in each of the 32 layers), the cards go in their folder. From then on, when their cards are needed, they just hand over the folder.
+Every single word the model generates means re-reading the entire sentence from the first word, running every student's dance, in every parallel classroom, in every one of the 32 layers. Just to add *one* new word at the end.
+
+It's like writing a book where, to add each new sentence, you re-read the entire book from page 1.
+
+Why does it work this way? Because each prediction is a self-contained calculation: *"given the sentence so far, what comes next?"* The "given the sentence so far" part is run fresh every time. The model has no built-in memory between predictions.
+
+For a 3-word sentence, that means re-running the whole machine over words 1, 2, 3 to get word #4. For a 1,000-word sentence, re-running over words 1 through 1,000 to get word #1,001. The cost gets brutal fast.
+
+But notice something: **every existing student's K and V cards would come out identical every single time.** Each student's cards depend only on students to their left, and nothing to their left has changed. So re-computing them is pure wasted work.
+
+The fix is obvious once you see it: **give every student a folder.** The first time they write their K and V cards (in each of the 32 layers), the cards go in the folder. Next generation step, when those cards are needed again, they just hand over the folder. No re-writing.
 
 That folder is the **KV cache**.
 
@@ -164,9 +174,11 @@ That folder is the **KV cache**.
   <text class="caption" x="360" y="352">past entries never change — that's why caching them is trivially correct.</text>
 </svg>
 
-Each new generation step only requires the brand-new student to write fresh cards. Everyone else just hands over their folder. Generation goes from painfully slow to fast.
+Now each new generation step only requires the brand-new student to write fresh cards. Everyone else hands over their folder. The expensive "re-reading the entire book" goes away.
 
-It works for the same reason database query caching works: the cached values are *immutable* once written. No invalidation logic, no cache-consistency dance. The only question is: how much memory do all these folders take?
+It's safe to cache because the cards are **frozen once written**. A student's K and V depend only on students sitting to their left. Nothing to their right — which is what's being added — can ever change them. So a cached folder can never go stale.
+
+The only question is: how much memory do all these folders take?
 
 ## the memory cost
 
