@@ -3,14 +3,14 @@ date: 2026-05-16
 tag: systems
 title: "The KV cache, from first principles"
 read: 8 min
-deck: "How attention and the KV cache actually work — explained with a small library."
+deck: "How attention and the KV cache actually work — from the basics up."
 ---
 
 The number that decides how much your LLM inference bill is doesn't appear on the model card. It isn't the parameter count. It isn't the context length. It's the **KV cache** — a per-request scratchpad in GPU memory that grows with every word the model generates.
 
 If you serve models, this is the dominant resource you're managing. Every recent inference trick exists to shrink it.
 
-This post explains what the KV cache is from scratch, with a small library.
+This post explains what the KV cache is from scratch, using a simple analogy.
 
 ## what an LLM does, in one line
 
