@@ -557,6 +557,17 @@ a:hover {
 .cat-sit {
   animation: cat-breathe 3.6s ease-in-out infinite;
 }
+.cat-stretch {
+  transform-origin: 50% 100%;
+  animation: cat-stretch 1.8s ease-in-out forwards;
+}
+@keyframes cat-stretch {
+  0%   { transform: translateY(0)   scaleY(1)    rotate(0); }
+  20%  { transform: translateY(-6px) scaleY(1.12) rotate(0); }
+  45%  { transform: translateY(-6px) scaleY(1.12) rotate(-4deg); }
+  70%  { transform: translateY(-6px) scaleY(1.12) rotate(4deg); }
+  100% { transform: translateY(0)   scaleY(1)    rotate(0); }
+}
 @keyframes cat-walk {
   from { transform: translateX(-110vw); }
   to   { transform: translateX(0); }
@@ -598,7 +609,7 @@ a:hover {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .cat-walk, .cat-sit,
+  .cat-walk, .cat-sit, .cat-stretch,
   .svg-cat .leg-a, .svg-cat .leg-b,
   .svg-cat .tail, .svg-cat .eye { animation: none; }
 }

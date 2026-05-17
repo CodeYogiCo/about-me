@@ -241,6 +241,19 @@ function Cat() {
     return () => clearTimeout(t)
   }, [])
 
+  useEffect(() => {
+    if (phase !== 'sit') return
+    let stretchEnd
+    const interval = setInterval(() => {
+      setPhase('stretch')
+      stretchEnd = setTimeout(() => setPhase('sit'), 1800)
+    }, 22000)
+    return () => {
+      clearInterval(interval)
+      clearTimeout(stretchEnd)
+    }
+  }, [phase])
+
   return (
     <div className={`cat cat-${phase}`} aria-hidden="true">
       {phase === 'walk' ? <SvgCatWalk /> : <SvgCatSit />}
