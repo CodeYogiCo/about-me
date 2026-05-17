@@ -598,6 +598,20 @@ a:hover {
   50%      { transform: rotate(-10deg); }
 }
 
+.cat-sit .svg-cat,
+.cat-stretch .svg-cat {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.cat-wagging .svg-cat .tail {
+  animation: tail-wag-burst 0.32s ease-in-out infinite;
+}
+@keyframes tail-wag-burst {
+  0%, 100% { transform: rotate(-22deg); }
+  50%      { transform: rotate(22deg); }
+}
+
 .svg-cat .eye {
   transform-box: fill-box;
   transform-origin: center;

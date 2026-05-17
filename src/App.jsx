@@ -218,7 +218,7 @@ function SvgCatSit() {
   return (
     <svg className="svg-cat svg-cat-sit" viewBox="0 0 64 60" width="118" height="110" aria-hidden="true">
       <g className="tail">
-        <path d="M 6 50 Q -2 30 20 36" stroke="currentColor" strokeWidth="2.6" fill="none" strokeLinecap="round" />
+        <path d="M 8 52 Q -2 30 14 12" stroke="currentColor" strokeWidth="2.6" fill="none" strokeLinecap="round" />
       </g>
       <ellipse cx="32" cy="42" rx="17" ry="15" fill="currentColor" />
       <circle cx="32" cy="22" r="12.5" fill="currentColor" />
@@ -235,6 +235,8 @@ function SvgCatSit() {
 
 function Cat() {
   const [phase, setPhase] = useState('walk')
+  const [wagging, setWagging] = useState(false)
+  const wagTimer = useRef(null)
 
   useEffect(() => {
     const t = setTimeout(() => setPhase('sit'), 5200)
@@ -254,8 +256,23 @@ function Cat() {
     }
   }, [phase])
 
+  useEffect(() => () => clearTimeout(wagTimer.current), [])
+
+  const onClick = () => {
+    if (phase === 'walk') return
+    setWagging(true)
+    clearTimeout(wagTimer.current)
+    wagTimer.current = setTimeout(() => setWagging(false), 4500)
+  }
+
   return (
-    <div className={`cat cat-${phase}`} aria-hidden="true">
+    <div
+      className={`cat cat-${phase}${wagging ? ' cat-wagging' : ''}`}
+      onClick={onClick}
+      role="button"
+      tabIndex={-1}
+      aria-label="pet the cat"
+    >
       {phase === 'walk' ? <SvgCatWalk /> : <SvgCatSit />}
     </div>
   )
